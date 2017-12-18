@@ -27,6 +27,12 @@
     <ClCompile Include="source\MyController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\MeshData.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\ShaderProgram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\MyView.hpp">
@@ -35,10 +41,45 @@
     <ClInclude Include="source\MyController.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="source\MeshData.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Primitives.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ShaderProgram.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\UniformStructs.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="doc\readme.txt">
       <Filter>Document Files</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <TygraShader Include="shaders\ambient_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\dir_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\point_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\skybox_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\skybox_vs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\sponza_vs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\spot_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
   </ItemGroup>
 </Project>

@@ -28,9 +28,12 @@ MyController::~MyController()
 void MyController::windowControlWillStart(tygra::Window * window)
 {
     window->setView(view_);
-    window->setTitle("Real-Time Graphics :: DeferMySponza");
-    std::cout << "Real-Time Graphics :: DeferMySponza" << std::endl;
-    std::cout << "  Press F2 to toggle an animated camera" << std::endl;
+    window->setTitle("Real-Time Graphics :: RepriseMySponza");
+    std::cout << "Real-Time Graphics :: RepriseMySponza" << std::endl;
+	std::cout << "*************************************\n" << std::endl;
+    std::cout << "  F2 - Toggle an animated camera" << std::endl;
+	std::cout << "  F3 - Toggle skybox" << std::endl;
+	std::cout << std::endl;
 }
 
 void MyController::windowControlDidStop(tygra::Window * window)
@@ -57,7 +60,7 @@ void MyController::windowControlMouseMoved(tygra::Window * window,
         int dy = y - prev_y;
         const float mouse_speed = 0.6f;
         scene_->getCamera().setRotationalVelocity(
-			sponza::Vector2(-dx * mouse_speed, -dy * mouse_speed));
+            sponza::Vector2(-dx * mouse_speed, -dy * mouse_speed));
     }
     prev_x = x;
     prev_y = y;
@@ -111,6 +114,12 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
     case tygra::kWindowKeyF2:
         scene_->toggleCameraAnimation();
         break;
+	case tygra::kWindowKeyF3:
+		view_->ToggleSkybox();
+		break;
+	case tygra::kWindowKeyEsc:
+		window->close();
+		break;
     }
 }
 
@@ -158,7 +167,7 @@ void MyController::windowControlGamepadAxisMoved(tygra::Window * window,
             camera_rotate_speed_[0] = 0.f;
         }
         scene_->getCamera().setRotationalVelocity(
-			sponza::Vector2(camera_rotate_speed_[0] * rotate_speed,
+            sponza::Vector2(camera_rotate_speed_[0] * rotate_speed,
                            camera_rotate_speed_[1] * rotate_speed));
         break;
     case tygra::kWindowGamepadAxisRightThumbY:
@@ -169,7 +178,7 @@ void MyController::windowControlGamepadAxisMoved(tygra::Window * window,
             camera_rotate_speed_[1] = 0.f;
         }
         scene_->getCamera().setRotationalVelocity(
-			sponza::Vector2(camera_rotate_speed_[0] * rotate_speed,
+            sponza::Vector2(camera_rotate_speed_[0] * rotate_speed,
                            camera_rotate_speed_[1] * rotate_speed));
         break;
     }
@@ -192,5 +201,5 @@ void MyController::updateCameraTranslation()
     const float forward_speed = key_speed * camera_move_speed_[2]
         - key_speed * camera_move_speed_[3];
     scene_->getCamera().setLinearVelocity(
-		sponza::Vector3(sideward_speed, 0, forward_speed));
+        sponza::Vector3(sideward_speed, 0, forward_speed));
 }

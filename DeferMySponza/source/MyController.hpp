@@ -49,7 +49,7 @@ private:
     void updateCameraTranslation();
 
     MyView * view_;
-	sponza::Context * scene_;
+    sponza::Context * scene_;
 
     bool camera_turn_mode_;
     float camera_move_speed_[4];
