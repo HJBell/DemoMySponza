@@ -23,11 +23,6 @@ void MyView::setScene(const sponza::Context * sponza)
     mScene = sponza;
 }
 
-void MyView::ToggleSkybox()
-{
-	mRenderSkybox = !mRenderSkybox;
-}
-
 
 //------------------------------------Private Functions-------------------------------------
 
@@ -37,58 +32,60 @@ void MyView::windowViewWillStart(tygra::Window * window)
     assert(mScene != nullptr);
 
 	// Creating the ambient pass shader program.
-	mAmbShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///ambient_fs.glsl");
-	mAmbShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 0);
-	mAmbShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 1);
-
-	// Creating the direction light pass shader program.
-	mDirShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///dir_fs.glsl");
-	mDirShaderProgram.CreateUniformBuffer("cpp_DirectionalLightUniforms", sizeof(DirectionalLightUniforms), 2);
-	mDirShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 3);
-	mDirShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 4);
-
-	// Creating the point light pass shader program.
-	mPointShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///point_fs.glsl");
-	mPointShaderProgram.CreateUniformBuffer("cpp_PointLightUniforms", sizeof(PointLightUniforms), 5);
-	mPointShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 6);
-	mPointShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 7);
-
-	// Creating the spot light pass shader program.
-	mSpotShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///spot_fs.glsl");
-	mSpotShaderProgram.CreateUniformBuffer("cpp_SpotLightUniforms", sizeof(SpotLightUniforms), 8);
-	mSpotShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 9);
-	mSpotShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 10);
-
-	// Creating the skybox pass shader program.
-	mSkyboxShaderProgram.Init("resource:///skybox_vs.glsl", "resource:///skybox_fs.glsl");
-	mSkyboxShaderProgram.CreateUniformBuffer("cpp_SkyboxUniforms", sizeof(SkyboxUniforms), 11);
+	mGBufferShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///gbuffer_fs.glsl");
+	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 0);
+	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 1);
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
 	for (const auto& mesh : geometryBuilder.getAllMeshes())
 		mMeshes[mesh.getId()].Init(mesh);
 
-	// Initialising the skybox mesh.
-	mSkyboxMesh.Init(CubeVerts);
-	
-	// Loading textures.
-	LoadTexture("resource:///hex.png", "Hex");
-	LoadTexture("resource:///marble.png", "Marble");
-	LoadTextureCube("resource:///skybox_stormy_", "Skybox");
-
 	// Setting OpenGL to cull mesh faces.
 	glEnable(GL_CULL_FACE);
+
+
+	//------------------------------------------------------------------
+	glGenTextures(1, &gbuffer_position_tex_);
+	glGenTextures(1, &gbuffer_normal_tex_);
+	glGenTextures(1, &gbuffer_depth_tex_);
+	glGenFramebuffers(1, &gbuffer_fbo_);
+	//------------------------------------------------------------------
 }
 
-void MyView::windowViewDidReset(tygra::Window * window,
-                                int width,
-                                int height)
+void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 {
+	mWidth = width;
+	mHeight = height;
+
 	// Setting the OpenGL viewport position and size.
-    glViewport(0, 0, width, height);
+    glViewport(0, 0, mWidth, mHeight);
 
 	// Specifying clear values for the colour buffers (0-1).
 	glClearColor(0.f, 0.f, 0.25f, 0.f);
+
+
+	//-----------------------------------------------------------------
+	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
+
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_depth_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_DEPTH24_STENCIL8, mWidth, mHeight, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_RECTANGLE, gbuffer_depth_tex_, 0);
+
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_RECTANGLE, gbuffer_position_tex_, 0);
+
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_, 0);
+
+	GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, buffers);
+
+	auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	assert(status == GL_FRAMEBUFFER_COMPLETE);
+	//-----------------------------------------------------------------
 }
 
 void MyView::windowViewDidStop(tygra::Window * window)
@@ -98,25 +95,21 @@ void MyView::windowViewDidStop(tygra::Window * window)
 		mesh.second.Dispose();
 
 	// Disposing of the shader programs.
-	mSkyboxShaderProgram.Dispose();
-	mAmbShaderProgram.Dispose();
-	mDirShaderProgram.Dispose();
-	mPointShaderProgram.Dispose();
-	mSpotShaderProgram.Dispose();
+	mGBufferShaderProgram.Dispose();
 
-	// Deleting the textures.
-	for (const auto& tex : mTextures)
-		glDeleteTextures(1, &tex.second);
+
+	//----------------------------------------------------------------
+	glDeleteTextures(1, &gbuffer_position_tex_);
+	glDeleteTextures(1, &gbuffer_normal_tex_);
+	glDeleteTextures(1, &gbuffer_depth_tex_);
+	glDeleteFramebuffers(1, &gbuffer_fbo_);	
+	//----------------------------------------------------------------
 }
 
 void MyView::windowViewRender(tygra::Window * window)
 {
 	// Terminating the program if 'scene_' is null.
 	assert(mScene != nullptr);
-
-	// Clearing the contents of the buffers from the previous frame.
-	glDepthMask(GL_TRUE);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Calculating the aspect ratio.
 	GLint viewportSize[4];
@@ -140,27 +133,6 @@ void MyView::windowViewRender(tygra::Window * window)
 		aspectRatio, camera.getNearPlaneDistance(),
 		camera.getFarPlaneDistance());	
 	glm::mat4 view = glm::lookAt(perFrameUniforms.cameraPos, perFrameUniforms.cameraPos + camDir, upDir);
-
-	// Carrying out an initial pass to draw the skybox if required.
-	if (mRenderSkybox)
-	{
-		// Setting the skybox shader program to be active and configuring OpenGL for the pass.
-		mSkyboxShaderProgram.Use();
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
-
-		// Populating the skybox shaders uniform variables.
-		SkyboxUniforms skyboxUniforms;
-		skyboxUniforms.cameraPos = (const glm::vec3 &)camera.getPosition();
-		skyboxUniforms.viewProjectionXform = projection * view;
-		mSkyboxShaderProgram.SetUniformBuffer("cpp_SkyboxUniforms", &skyboxUniforms, sizeof(skyboxUniforms));
-		mSkyboxShaderProgram.SetTextureCubeUniform(mTextures["Skybox"], "cpp_CubeMap");
-
-		// Binding the skybox VAO and drawing.
-		mSkyboxMesh.BindVAO();
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-		glBindVertexArray(0);
-	}	
 
 	// Looping through the meshes in the scene and capturing their uniform properties for the frame.
 	mPerModelUniforms.clear();
@@ -194,96 +166,35 @@ void MyView::windowViewRender(tygra::Window * window)
 		mPerModelUniforms.push_back(currentPerModelUniforms);
 	}
 
+
+	//-----------------------------------------------------------------
+	glClearColor(0.f, 0.f, 0.25f, 1.f);
+	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
+
+	glDisable(GL_STENCIL_TEST);
+	glStencilFunc(GL_NOTEQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
 	// Carrying out the ambient pass.
 	{
 		// Setting the ambient shader program to be active and configuring OpenGL for the pass.
-		mAmbShaderProgram.Use();
+		mGBufferShaderProgram.Use();
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask(GL_TRUE);
 		glDepthFunc(GL_LESS);
 		glDisable(GL_BLEND);
+		glClear(GL_DEPTH_BUFFER_BIT);
 
 		// Populating the ambient shaders uniform variables.
-		mAmbShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
+		mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
 
 		// Drawing the meshes in the scene (instanced).
-		DrawMeshesInstanced(mAmbShaderProgram);
-	}
-	
-	// Carrying out the directional pass.
-	{
-		// Setting the directional shader program to be active and configuring OpenGL for the pass.
-		mDirShaderProgram.Use();
-		glDepthMask(GL_FALSE);
-		glDepthFunc(GL_EQUAL);
-		glEnable(GL_BLEND);
-		glBlendEquation(GL_FUNC_ADD);
-		glBlendFunc(GL_ONE, GL_ONE);
-
-		// Populating the directional shaders per frame uniform variables.
-		mDirShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-
-		// Drawing the scene once for each directional light.
-		for (const auto& light : mScene->getAllDirectionalLights())
-		{
-			// Populating the directional shaders light uniform variables.
-			DirectionalLightUniforms directionalLightUniform;
-			directionalLightUniform.light.direction = (const glm::vec3 &)light.getDirection();
-			directionalLightUniform.light.intensity = (const glm::vec3 &)light.getIntensity();
-			mDirShaderProgram.SetUniformBuffer("cpp_DirectionalLightUniforms", &directionalLightUniform, sizeof(directionalLightUniform));
-
-			// Drawing the meshes in the scene (instanced).
-			DrawMeshesInstanced(mDirShaderProgram);
-		}
-	}
-	
-	// Carrying out the point light pass.
-	{
-		// Setting the point light shader program to be active.
-		mPointShaderProgram.Use();
-
-		// Populating the point light shaders per frame uniform variables.
-		mPointShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-
-		// Drawing the scene once for each point light.
-		for (const auto& light : mScene->getAllPointLights())
-		{
-			// Populating the point light shaders light uniform variables.
-			PointLightUniforms pointLightUniform;
-			pointLightUniform.light.position = (const glm::vec3 &)light.getPosition();
-			pointLightUniform.light.range = light.getRange();
-			pointLightUniform.light.intensity = (const glm::vec3 &)light.getIntensity();
-			mPointShaderProgram.SetUniformBuffer("cpp_PointLightUniforms", &pointLightUniform, sizeof(pointLightUniform));
-
-			// Drawing the meshes in the scene (instanced).
-			DrawMeshesInstanced(mPointShaderProgram);
-		}
+		DrawMeshesInstanced(mGBufferShaderProgram);
 	}
 
-	// Carrying out the spot light pass.
-	{
-		// Setting the spot light shader program to be active.
-		mSpotShaderProgram.Use();
-
-		// Populating the spot light shaders per frame uniform variables.
-		mSpotShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-
-		// Drawing the scene once for each spot light.
-		for (const auto& light : mScene->getAllSpotLights())
-		{
-			// Populating the spot light shaders light uniform variables.
-			SpotLightUniforms spotLightUniform;
-			spotLightUniform.light.position = (const glm::vec3 &)light.getPosition();
-			spotLightUniform.light.range = light.getRange();
-			spotLightUniform.light.intensity = (const glm::vec3 &)light.getIntensity();
-			spotLightUniform.light.angle = light.getConeAngleDegrees();
-			spotLightUniform.light.direction = (const glm::vec3 &)light.getDirection();
-			mSpotShaderProgram.SetUniformBuffer("cpp_SpotLightUniforms", &spotLightUniform, sizeof(spotLightUniform));
-
-			// Drawing the meshes in the scene (instanced).
-			DrawMeshesInstanced(mSpotShaderProgram);
-		}
-	}
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	//-----------------------------------------------------------------
 }
 
 void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
@@ -298,7 +209,6 @@ void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
 
 		// Populating the per model and texture uniform variables for the current mesh.
 		shaderProgram.SetUniformBuffer("cpp_PerModelUniforms", &(mPerModelUniforms[i]), sizeof((mPerModelUniforms[i])));
-		shaderProgram.SetTextureUniform(mTextures.at("Marble"), "cpp_Texture");
 
 		// Binding the mesh and drawing it.
 		mesh.second.BindVAO();
@@ -307,73 +217,4 @@ void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
 
 		i++;
 	}
-}
-
-void MyView::LoadTexture(std::string path, std::string name)
-{
-	//Checking the texture is not already loaded.
-	if (mTextures.find(path) != mTextures.end()) return;
-
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-	//Loading the texture.
-	tygra::Image texture = tygra::createImageFromPngFile(path);
-
-	//Checking the texture contains data.
-	if (texture.doesContainData())
-	{
-		//Loading the texture and storing its ID in the 'textures' map.
-		glGenTextures(1, &mTextures[name]);
-		glBindTexture(GL_TEXTURE_2D, mTextures[name]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		GLenum pixel_formats[] = { 0, GL_RED, GL_RG, GL_RGB, GL_RGBA };
-
-		glTexImage2D(GL_TEXTURE_2D,
-			0,
-			GL_RGBA,
-			(GLsizei)texture.width(),
-			(GLsizei)texture.height(),
-			0,
-			pixel_formats[texture.componentsPerPixel()],
-			texture.bytesPerComponent() == 1 ? GL_UNSIGNED_BYTE
-			: GL_UNSIGNED_SHORT,
-			texture.pixelData());
-
-		glGenerateMipmap(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
-	else std::cerr << "Warning : Texture '" << path << "' does not contain any data." << std::endl;
-}
-
-void MyView::LoadTextureCube(std::string path, std::string name)
-{
-	// Checking the texture is not already loaded.
-	if (mTextures.find(path) != mTextures.end()) return;
-
-	// Generating the texture cube.
-	glGenTextures(1, &mTextures[name]);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, mTextures[name]);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-	// Loading each texture to be used as a face for the texture cube.
-	for (size_t i = 0; i < 6; ++i) {
-		const std::string url = path + std::to_string(i) + ".png";
-		tygra::Image img = tygra::createImageFromPngFile(url);
-		if (!img.doesContainData()) {
-			throw std::runtime_error("failed to load " + url);
-		}
-		GLenum pixel_formats[] = { 0, GL_RED, GL_RG, GL_RGB, GL_RGBA };
-		glTexImage2D((GLenum)(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i), 0, GL_RGBA, (GLsizei)img.width(), (GLsizei)img.height(), 0,
-			pixel_formats[img.componentsPerPixel()],
-			img.bytesPerComponent() == 1 ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT, img.pixelData());
-	}
-	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 }

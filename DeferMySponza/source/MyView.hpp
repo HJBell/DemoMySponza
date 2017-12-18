@@ -18,29 +18,27 @@ public:
     MyView();
     ~MyView();
 
-    void setScene(const sponza::Context * sponza);
-	void ToggleSkybox();
+    void setScene(const sponza::Context * sponza);	
 
 private:
 	const sponza::Context * mScene;
-	ShaderProgram mSkyboxShaderProgram;
-	ShaderProgram mAmbShaderProgram;
-	ShaderProgram mDirShaderProgram;
-	ShaderProgram mPointShaderProgram;
-	ShaderProgram mSpotShaderProgram;
+	ShaderProgram mGBufferShaderProgram;
 	std::vector<PerModelUniforms> mPerModelUniforms;
 	std::map<sponza::MeshId, MeshData> mMeshes;
-	MeshData mSkyboxMesh;
-	std::map<std::string, GLuint> mTextures;
-	bool mRenderSkybox = false;
+
+	int mWidth = 0;
+	int mHeight = 0;
+
+	GLuint gbuffer_position_tex_{ 0 };
+	GLuint gbuffer_normal_tex_{ 0 };
+	GLuint gbuffer_depth_tex_{ 0 };
+	GLuint gbuffer_fbo_{ 0 };
 
     void windowViewWillStart(tygra::Window * window) override;
     void windowViewDidReset(tygra::Window * window, int width, int height) override;
     void windowViewDidStop(tygra::Window * window) override;
     void windowViewRender(tygra::Window * window) override;
 	void DrawMeshesInstanced(ShaderProgram& shaderProgram) const;
-	void LoadTexture(std::string path, std::string name);
-	void LoadTextureCube(std::string path, std::string name);
 };
 
 

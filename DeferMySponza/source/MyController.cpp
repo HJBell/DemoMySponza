@@ -1,9 +1,7 @@
 #include "MyController.hpp"
 #include "MyView.hpp"
-
 #include <sponza/sponza.hpp>
 #include <tygra/Window.hpp>
-
 #include <iostream>
 
 MyController::MyController() : camera_turn_mode_(false)
@@ -114,9 +112,9 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
     case tygra::kWindowKeyF2:
         scene_->toggleCameraAnimation();
         break;
-	case tygra::kWindowKeyF3:
+	/*case tygra::kWindowKeyF3:
 		view_->ToggleSkybox();
-		break;
+		break;*/
 	case tygra::kWindowKeyEsc:
 		window->close();
 		break;

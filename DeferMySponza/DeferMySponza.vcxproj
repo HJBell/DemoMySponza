@@ -293,6 +293,7 @@
   <ItemGroup>
     <TygraShader Include="shaders\ambient_fs.glsl" />
     <TygraShader Include="shaders\dir_fs.glsl" />
+    <TygraShader Include="shaders\gbuffer_fs.glsl" />
     <TygraShader Include="shaders\point_fs.glsl" />
     <TygraShader Include="shaders\skybox_fs.glsl" />
     <TygraShader Include="shaders\skybox_vs.glsl" />

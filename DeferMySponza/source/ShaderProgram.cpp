@@ -36,6 +36,9 @@ void ShaderProgram::Init(std::string vertexShaderPath, std::string fragmentShade
 	glAttachShader(mProgramID, vertexShaderID);
 	glAttachShader(mProgramID, fragmentShaderID);
 
+	glBindFragDataLocation(mProgramID, 0, "fs_Position");
+	glBindFragDataLocation(mProgramID, 1, "fs_Normal");
+
 	// Linking the shader program
 	glLinkProgram(mProgramID);
 
