@@ -101,11 +101,13 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	// Terminating the program if 'scene_' is null.
     assert(mScene != nullptr);
 	
-	mGBufferShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///gbuffer_fs.glsl", true);
+	mGBufferShaderProgram.Init("resource:///gbuffer_vs.glsl", "resource:///gbuffer_fs.glsl", true);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 0);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 1);
 
-	mAmbientShaderProgram.Init("resource:///global_light_vs.glsl", "resource:///global_light_fs.glsl");
+	mAmbientShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///ambient_fs.glsl");
+
+	mDirectionalShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///directional_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
@@ -119,6 +121,7 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	//------------------------------------------------------------------
 	glGenTextures(1, &gbuffer_position_tex_);
 	glGenTextures(1, &gbuffer_normal_tex_);
+	glGenTextures(1, &gbuffer_colour_tex_);
 	glGenTextures(1, &gbuffer_depth_tex_);
 	glGenFramebuffers(1, &gbuffer_fbo_);
 	glGenRenderbuffers(1, &lbuffer_colour_rbo_);
@@ -153,8 +156,12 @@ void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_, 0);
 
-	GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glDrawBuffers(2, buffers);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_, 0);
+
+	GLenum buffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+	glDrawBuffers(3, buffers);
 
 	auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);
@@ -183,10 +190,12 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	// Disposing of the shader programs.
 	mGBufferShaderProgram.Dispose();
 	mAmbientShaderProgram.Dispose();
+	mDirectionalShaderProgram.Dispose();
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
 	glDeleteTextures(1, &gbuffer_normal_tex_);
+	glDeleteTextures(1, &gbuffer_colour_tex_);
 	glDeleteTextures(1, &gbuffer_depth_tex_);
 	glDeleteFramebuffers(1, &gbuffer_fbo_);	
 	glDeleteFramebuffers(1, &lbuffer_fbo_);
@@ -254,40 +263,99 @@ void MyView::windowViewRender(tygra::Window * window)
 		mPerModelUniforms.push_back(currentPerModelUniforms);
 	}
 
+
 	// CREATING THE GBUFFER
 	//-----------------------------------------------------------------
 	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
 	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_BLEND);
 
-	{
-		mGBufferShaderProgram.Use();
-		glEnable(GL_DEPTH_TEST);
-		glDepthMask(GL_TRUE);
-		glDepthFunc(GL_LESS);
-		glClearStencil(128);
-		glEnable(GL_STENCIL_TEST);
-		glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-		glStencilFunc(GL_ALWAYS, 0, ~0);
-		glStencilMask(~0);
+	mGBufferShaderProgram.Use();
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LESS);
+	glClearStencil(128);
+	glEnable(GL_STENCIL_TEST);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+	glStencilFunc(GL_ALWAYS, 0, ~0);
+	glStencilMask(~0);
 
-		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-		// Populating the ambient shaders uniform variables.
-		mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
+	mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
+	DrawMeshesInstanced(mGBufferShaderProgram);
 
-		// Drawing the meshes in the scene (instanced).
-		DrawMeshesInstanced(mGBufferShaderProgram);
-	}
-
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	//glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//-----------------------------------------------------------------
+
+
+	// BIND AND CONFIGURE THE LBUFFER
+	//-----------------------------------------------------------------
+	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
+	glClearColor(0.f, 0.f, 0.25f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	//-----------------------------------------------------------------
+
+
+	// AMBIENT
+	//-----------------------------------------------------------------
+	mAmbientShaderProgram.Use();
+
+	glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_ColourTex"), 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
+
+	auto ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
+	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "cpp_AmbientIntensity"), 1, glm::value_ptr(ambientIntensity));
+
+	glBindVertexArray(light_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);	
+	//-----------------------------------------------------------------
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBlendEquation(GL_FUNC_ADD);
+
+	// DIRECTIONAL
+	//-----------------------------------------------------------------
+	mDirectionalShaderProgram.Use();
+	auto directionalLights = mScene->getAllDirectionalLights();
+	for (auto light : directionalLights)
+	{
+		auto lightDir = (const glm::vec3 &)light.getDirection();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+
+		glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_NormalTex"), 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+
+		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
+		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+
+		glBindVertexArray(light_quad_mesh_.vao);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glBindVertexArray(0);
+	}	
+	//-----------------------------------------------------------------
+
+
+	// BLITTING THE LBUFFER TO THE SCREEN
+	//-----------------------------------------------------------------
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	//-----------------------------------------------------------------
+
+	
 
 
 	// SHADING THE SCENE
 	//-----------------------------------------------------------------
-	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
+	/*glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
 	glClearColor(0.f, 0.f, 0.25f, 1.f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
@@ -311,7 +379,7 @@ void MyView::windowViewRender(tygra::Window * window)
 	glBindVertexArray(0);
 
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);*/
 	//-----------------------------------------------------------------
 }
 

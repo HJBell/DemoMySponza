@@ -42,9 +42,11 @@ private:
 
 	ShaderProgram mGBufferShaderProgram;
 	ShaderProgram mAmbientShaderProgram;
+	ShaderProgram mDirectionalShaderProgram;
 
 	GLuint gbuffer_position_tex_{ 0 };
 	GLuint gbuffer_normal_tex_{ 0 };
+	GLuint gbuffer_colour_tex_{ 0 };
 	GLuint gbuffer_depth_tex_{ 0 };
 	GLuint gbuffer_fbo_{ 0 };
 

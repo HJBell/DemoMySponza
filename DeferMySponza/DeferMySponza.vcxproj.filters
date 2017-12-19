@@ -63,13 +63,16 @@
     <TygraShader Include="shaders\gbuffer_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
-    <TygraShader Include="shaders\global_light_fs.glsl">
+    <TygraShader Include="shaders\gbuffer_vs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
-    <TygraShader Include="shaders\global_light_vs.glsl">
+    <TygraShader Include="shaders\ambient_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
-    <TygraShader Include="shaders\sponza_vs.glsl">
+    <TygraShader Include="shaders\deffered_vs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\directional_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
   </ItemGroup>

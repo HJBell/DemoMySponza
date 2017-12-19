@@ -1,2 +1,2 @@
 ﻿  DeferMySponza.vcxproj -> C:\Users\p4014518\Desktop\DemoMySponza\build\bin\x64\Debug\DeferMySponza.exe
-  Copying shader files to build directory... shaders\global_light_fs.glsl
+  Copying shader files to build directory... shaders\directional_fs.glsl

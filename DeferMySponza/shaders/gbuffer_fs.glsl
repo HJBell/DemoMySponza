@@ -55,6 +55,7 @@ flat in int vs_InstanceID;
 
 out vec3 fs_Position;
 out vec3 fs_Normal;
+out vec3 fs_Colour;
 
 
 //----------------------Main Function----------------------
@@ -63,4 +64,5 @@ void main(void)
 {	
 	fs_Position = vs_Position;
 	fs_Normal = vs_Normal;
+	fs_Colour = cpp_Instances[vs_InstanceID].diffuse;
 }
