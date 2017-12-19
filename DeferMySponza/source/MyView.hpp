@@ -39,11 +39,13 @@ private:
 
 	Mesh light_quad_mesh_; // vertex array of vec2 position
 	Mesh light_sphere_mesh_; // element array into vec3 position
+	Mesh light_cone_mesh_;
 
 	ShaderProgram mGBufferShaderProgram;
 	ShaderProgram mAmbientShaderProgram;
 	ShaderProgram mDirectionalShaderProgram;
 	ShaderProgram mPointShaderProgram;
+	ShaderProgram mSpotShaderProgram;
 
 	GLuint gbuffer_position_tex_{ 0 };
 	GLuint gbuffer_normal_tex_{ 0 };

@@ -95,6 +95,42 @@ void MyView::windowViewWillStart(tygra::Window * window)
 		glBindVertexArray(0);
 	}
 
+	/*
+	* Tutorial: this code creates a cone to use when deferred shading
+	*           with a spot light source.
+	*/
+	{
+		tsl::IndexedMeshPtr mesh = tsl::createConePtr(1.f, 1.f, 12);
+		mesh = tsl::cloneIndexedMeshAsTriangleListPtr(mesh.get());
+
+		light_cone_mesh_.element_count = mesh->indexCount();
+
+		glGenBuffers(1, &light_cone_mesh_.vertex_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, light_cone_mesh_.vertex_vbo);
+		glBufferData(GL_ARRAY_BUFFER,
+			mesh->vertexCount() * sizeof(glm::vec3),
+			mesh->positionArray(),
+			GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glGenBuffers(1, &light_cone_mesh_.element_vbo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, light_cone_mesh_.element_vbo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+			mesh->indexCount() * sizeof(unsigned int),
+			mesh->indexArray(),
+			GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		glGenVertexArrays(1, &light_cone_mesh_.vao);
+		glBindVertexArray(light_cone_mesh_.vao);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, light_cone_mesh_.element_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, light_cone_mesh_.vertex_vbo);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+			sizeof(glm::vec3), 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
 
 
 
@@ -110,6 +146,8 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	mDirectionalShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///directional_fs.glsl");
 
 	mPointShaderProgram.Init("resource:///point_vs.glsl", "resource:///point_fs.glsl");
+
+	mSpotShaderProgram.Init("resource:///spot_vs.glsl", "resource:///spot_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
@@ -194,6 +232,7 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	mAmbientShaderProgram.Dispose();
 	mDirectionalShaderProgram.Dispose();
 	mPointShaderProgram.Dispose();
+	mSpotShaderProgram.Dispose();
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
@@ -385,6 +424,55 @@ void MyView::windowViewRender(tygra::Window * window)
 
 		glBindVertexArray(light_sphere_mesh_.vao);
 		glDrawElements(GL_TRIANGLES, light_sphere_mesh_.element_count, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+
+	glCullFace(GL_BACK);
+	//-----------------------------------------------------------------
+
+
+	// SPOT
+	//-----------------------------------------------------------------
+	mSpotShaderProgram.Use();
+
+	glCullFace(GL_FRONT);
+
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
+
+	auto spotLights = mScene->getAllSpotLights();
+	for (auto light : spotLights)
+	{
+		auto lightPos = (const glm::vec3 &)light.getPosition();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+		auto lightRange = light.getRange();
+		auto lightAngle = glm::radians(light.getConeAngleDegrees()) / 2.f;
+		auto lightDir = glm::normalize((const glm::vec3 &)light.getDirection());
+
+		auto t = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -1.f));
+		auto radius = glm::tan(lightAngle) * lightRange;
+		auto s = glm::scale(glm::mat4(), glm::vec3(radius, radius, lightRange));
+		auto r = glm::inverse(glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(0.f, 1.f, 0.f)));
+		auto model = r * s * t;
+		auto mvp = projection * view * model;
+
+		glUniformMatrix4fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
+
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
+		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightAngle"), lightAngle);
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
+
+		glBindVertexArray(light_cone_mesh_.vao);
+		glDrawElements(GL_TRIANGLES, light_cone_mesh_.element_count, GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 	}
 
