@@ -43,6 +43,7 @@ private:
 	ShaderProgram mGBufferShaderProgram;
 	ShaderProgram mAmbientShaderProgram;
 	ShaderProgram mDirectionalShaderProgram;
+	ShaderProgram mPointShaderProgram;
 
 	GLuint gbuffer_position_tex_{ 0 };
 	GLuint gbuffer_normal_tex_{ 0 };

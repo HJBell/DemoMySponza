@@ -108,6 +108,8 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	mAmbientShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///ambient_fs.glsl");
 
 	mDirectionalShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///directional_fs.glsl");
+
+	mPointShaderProgram.Init("resource:///point_vs.glsl", "resource:///point_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
@@ -191,6 +193,7 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	mGBufferShaderProgram.Dispose();
 	mAmbientShaderProgram.Dispose();
 	mDirectionalShaderProgram.Dispose();
+	mPointShaderProgram.Dispose();
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
@@ -317,9 +320,11 @@ void MyView::windowViewRender(tygra::Window * window)
 	glBindVertexArray(0);	
 	//-----------------------------------------------------------------
 
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 	glBlendEquation(GL_FUNC_ADD);
+
 
 	// DIRECTIONAL
 	//-----------------------------------------------------------------
@@ -341,6 +346,49 @@ void MyView::windowViewRender(tygra::Window * window)
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		glBindVertexArray(0);
 	}	
+	//-----------------------------------------------------------------
+
+
+	// POINT
+	//-----------------------------------------------------------------
+	mPointShaderProgram.Use();
+
+	glCullFace(GL_FRONT);
+
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
+
+	auto pointLights = mScene->getAllPointLights();
+	for (auto light : pointLights)
+	{
+		auto lightPos = (const glm::vec3 &)light.getPosition();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+		auto lightRange = light.getRange();
+
+		auto t = glm::translate(glm::mat4(), lightPos);
+		auto s = glm::scale(glm::mat4(), glm::vec3(lightRange, lightRange, lightRange));
+		auto model = t * s;
+		auto mvp = projection * view * model;
+
+		glUniformMatrix4fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
+
+		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
+		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+		glUniform1f(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
+
+		glBindVertexArray(light_sphere_mesh_.vao);
+		glDrawElements(GL_TRIANGLES, light_sphere_mesh_.element_count, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+
+	glCullFace(GL_BACK);
 	//-----------------------------------------------------------------
 
 
