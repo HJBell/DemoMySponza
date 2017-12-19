@@ -60,28 +60,16 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <TygraShader Include="shaders\ambient_fs.glsl">
+    <TygraShader Include="shaders\gbuffer_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
-    <TygraShader Include="shaders\dir_fs.glsl">
+    <TygraShader Include="shaders\global_light_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
-    <TygraShader Include="shaders\point_fs.glsl">
-      <Filter>Shader Files</Filter>
-    </TygraShader>
-    <TygraShader Include="shaders\skybox_fs.glsl">
-      <Filter>Shader Files</Filter>
-    </TygraShader>
-    <TygraShader Include="shaders\skybox_vs.glsl">
+    <TygraShader Include="shaders\global_light_vs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
     <TygraShader Include="shaders\sponza_vs.glsl">
-      <Filter>Shader Files</Filter>
-    </TygraShader>
-    <TygraShader Include="shaders\spot_fs.glsl">
-      <Filter>Shader Files</Filter>
-    </TygraShader>
-    <TygraShader Include="shaders\gbuffer_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
   </ItemGroup>

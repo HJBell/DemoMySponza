@@ -291,14 +291,10 @@
     <None Include="doc\readme.txt" />
   </ItemGroup>
   <ItemGroup>
-    <TygraShader Include="shaders\ambient_fs.glsl" />
-    <TygraShader Include="shaders\dir_fs.glsl" />
     <TygraShader Include="shaders\gbuffer_fs.glsl" />
-    <TygraShader Include="shaders\point_fs.glsl" />
-    <TygraShader Include="shaders\skybox_fs.glsl" />
-    <TygraShader Include="shaders\skybox_vs.glsl" />
+    <TygraShader Include="shaders\global_light_fs.glsl" />
+    <TygraShader Include="shaders\global_light_vs.glsl" />
     <TygraShader Include="shaders\sponza_vs.glsl" />
-    <TygraShader Include="shaders\spot_fs.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

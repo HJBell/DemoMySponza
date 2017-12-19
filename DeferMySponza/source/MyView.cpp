@@ -1,5 +1,6 @@
 #include "MyView.hpp"
 #include "Primitives.hpp"
+#include <tsl/shapes.hpp>
 #include <sponza/sponza.hpp>
 #include <tygra/FileHelper.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -28,13 +29,83 @@ void MyView::setScene(const sponza::Context * sponza)
 
 void MyView::windowViewWillStart(tygra::Window * window)
 {
+	/*
+	* Tutorial: this section of code creates a fullscreen quad to be used
+	*           when computing global illumination effects (e.g. ambient)
+	*/
+	{
+		std::vector<glm::vec2> vertices(4);
+		vertices[0] = glm::vec2(-1, -1);
+		vertices[1] = glm::vec2(1, -1);
+		vertices[2] = glm::vec2(1, 1);
+		vertices[3] = glm::vec2(-1, 1);
+
+		glGenBuffers(1, &light_quad_mesh_.vertex_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, light_quad_mesh_.vertex_vbo);
+		glBufferData(GL_ARRAY_BUFFER,
+			vertices.size() * sizeof(glm::vec2),
+			vertices.data(),
+			GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glGenVertexArrays(1, &light_quad_mesh_.vao);
+		glBindVertexArray(light_quad_mesh_.vao);
+		glBindBuffer(GL_ARRAY_BUFFER, light_quad_mesh_.vertex_vbo);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
+			sizeof(glm::vec2), 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+
+	/*
+	* Tutorial: this code creates a sphere to use when deferred shading
+	*           with a point light source.
+	*/
+	{
+		tsl::IndexedMeshPtr mesh = tsl::createSpherePtr(1.f, 12);
+		mesh = tsl::cloneIndexedMeshAsTriangleListPtr(mesh.get());
+
+		light_sphere_mesh_.element_count = mesh->indexCount();
+
+		glGenBuffers(1, &light_sphere_mesh_.vertex_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, light_sphere_mesh_.vertex_vbo);
+		glBufferData(GL_ARRAY_BUFFER,
+			mesh->vertexCount() * sizeof(glm::vec3),
+			mesh->positionArray(),
+			GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glGenBuffers(1, &light_sphere_mesh_.element_vbo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, light_sphere_mesh_.element_vbo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+			mesh->indexCount() * sizeof(unsigned int),
+			mesh->indexArray(),
+			GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		glGenVertexArrays(1, &light_sphere_mesh_.vao);
+		glBindVertexArray(light_sphere_mesh_.vao);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, light_sphere_mesh_.element_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, light_sphere_mesh_.vertex_vbo);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+			sizeof(glm::vec3), 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+
+
+
+
 	// Terminating the program if 'scene_' is null.
     assert(mScene != nullptr);
-
-	// Creating the ambient pass shader program.
-	mGBufferShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///gbuffer_fs.glsl");
+	
+	mGBufferShaderProgram.Init("resource:///sponza_vs.glsl", "resource:///gbuffer_fs.glsl", true);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 0);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 1);
+
+	mAmbientShaderProgram.Init("resource:///global_light_vs.glsl", "resource:///global_light_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
@@ -50,6 +121,8 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	glGenTextures(1, &gbuffer_normal_tex_);
 	glGenTextures(1, &gbuffer_depth_tex_);
 	glGenFramebuffers(1, &gbuffer_fbo_);
+	glGenRenderbuffers(1, &lbuffer_colour_rbo_);
+	glGenFramebuffers(1, &lbuffer_fbo_);
 	//------------------------------------------------------------------
 }
 
@@ -85,6 +158,19 @@ void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 
 	auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);
+
+
+
+	glBindRenderbuffer(GL_RENDERBUFFER, lbuffer_colour_rbo_);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, mWidth, mHeight);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, lbuffer_colour_rbo_);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_RECTANGLE, gbuffer_depth_tex_, 0);
+
+	status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	assert(status == GL_FRAMEBUFFER_COMPLETE);
 	//-----------------------------------------------------------------
 }
 
@@ -96,13 +182,15 @@ void MyView::windowViewDidStop(tygra::Window * window)
 
 	// Disposing of the shader programs.
 	mGBufferShaderProgram.Dispose();
-
+	mAmbientShaderProgram.Dispose();
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
 	glDeleteTextures(1, &gbuffer_normal_tex_);
 	glDeleteTextures(1, &gbuffer_depth_tex_);
 	glDeleteFramebuffers(1, &gbuffer_fbo_);	
+	glDeleteFramebuffers(1, &lbuffer_fbo_);
+	glDeleteRenderbuffers(1, &lbuffer_colour_rbo_);
 	//----------------------------------------------------------------
 }
 
@@ -166,24 +254,24 @@ void MyView::windowViewRender(tygra::Window * window)
 		mPerModelUniforms.push_back(currentPerModelUniforms);
 	}
 
-
+	// CREATING THE GBUFFER
 	//-----------------------------------------------------------------
-	glClearColor(0.f, 0.f, 0.25f, 1.f);
 	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
-
 	glDisable(GL_STENCIL_TEST);
-	glStencilFunc(GL_NOTEQUAL, 0, ~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	glDisable(GL_BLEND);
 
-	// Carrying out the ambient pass.
 	{
-		// Setting the ambient shader program to be active and configuring OpenGL for the pass.
 		mGBufferShaderProgram.Use();
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask(GL_TRUE);
 		glDepthFunc(GL_LESS);
-		glDisable(GL_BLEND);
-		glClear(GL_DEPTH_BUFFER_BIT);
+		glClearStencil(128);
+		glEnable(GL_STENCIL_TEST);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+		glStencilFunc(GL_ALWAYS, 0, ~0);
+		glStencilMask(~0);
+
+		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		// Populating the ambient shaders uniform variables.
 		mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
@@ -191,6 +279,36 @@ void MyView::windowViewRender(tygra::Window * window)
 		// Drawing the meshes in the scene (instanced).
 		DrawMeshesInstanced(mGBufferShaderProgram);
 	}
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	//glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	//-----------------------------------------------------------------
+
+
+	// SHADING THE SCENE
+	//-----------------------------------------------------------------
+	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
+	glClearColor(0.f, 0.f, 0.25f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	mAmbientShaderProgram.Use();
+
+	glUniform1i(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "sampler_world_position"), 0);
+	glUniform1i(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "sampler_world_normal"), 1);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+	const glm::vec3 global_light_direction = glm::normalize(glm::vec3(-3.f, -2.f, 1.f));
+	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "light_direction"), 1, glm::value_ptr(global_light_direction));
+
+	glBindVertexArray(light_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
