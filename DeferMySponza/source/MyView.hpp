@@ -28,6 +28,8 @@ private:
 
 	std::vector<PerModelUniforms> mPerModelUniforms;
 	std::map<sponza::MeshId, MeshData> mMeshes;
+	std::map<sponza::MeshId, MeshData> mCurtains;
+
 
 	struct Mesh
 	{
@@ -37,7 +39,7 @@ private:
 		int element_count{ 0 };
 	};
 
-	Mesh light_quad_mesh_; // vertex array of vec2 position
+	Mesh screen_quad_mesh_; // vertex array of vec2 position
 	Mesh light_sphere_mesh_; // element array into vec3 position
 	Mesh light_cone_mesh_;
 
@@ -46,6 +48,8 @@ private:
 	ShaderProgram mDirectionalShaderProgram;
 	ShaderProgram mPointShaderProgram;
 	ShaderProgram mSpotShaderProgram;
+	ShaderProgram mSSRShaderProgram;
+
 
 	GLuint gbuffer_position_tex_{ 0 };
 	GLuint gbuffer_normal_tex_{ 0 };
@@ -54,7 +58,7 @@ private:
 	GLuint gbuffer_fbo_{ 0 };
 
 	GLuint lbuffer_fbo_{ 0 };
-	GLuint lbuffer_colour_rbo_{ 0 };
+	GLuint lbuffer_colour_tex_{ 0 };
 
     void windowViewWillStart(tygra::Window * window) override;
     void windowViewDidReset(tygra::Window * window, int width, int height) override;

@@ -1,2 +1,4 @@
-﻿  DeferMySponza.vcxproj -> C:\Users\p4014518\Desktop\DemoMySponza\build\bin\x64\Debug\DeferMySponza.exe
-  Copying shader files to build directory... shaders\spot_fs.glsl
+﻿  MyView.cpp
+  No target GL version declared, defaulting to GL 3.3
+  For example, use #define TGL_TARGET_GL_4_1 before including tgl.h to specify OpenGL 4.1
+  DeferMySponza.vcxproj -> C:\Users\p4014518\Desktop\DemoMySponza\build\bin\x64\Debug\DeferMySponza.exe

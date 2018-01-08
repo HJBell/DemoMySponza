@@ -40,17 +40,17 @@ void MyView::windowViewWillStart(tygra::Window * window)
 		vertices[2] = glm::vec2(1, 1);
 		vertices[3] = glm::vec2(-1, 1);
 
-		glGenBuffers(1, &light_quad_mesh_.vertex_vbo);
-		glBindBuffer(GL_ARRAY_BUFFER, light_quad_mesh_.vertex_vbo);
+		glGenBuffers(1, &screen_quad_mesh_.vertex_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, screen_quad_mesh_.vertex_vbo);
 		glBufferData(GL_ARRAY_BUFFER,
 			vertices.size() * sizeof(glm::vec2),
 			vertices.data(),
 			GL_STATIC_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		glGenVertexArrays(1, &light_quad_mesh_.vao);
-		glBindVertexArray(light_quad_mesh_.vao);
-		glBindBuffer(GL_ARRAY_BUFFER, light_quad_mesh_.vertex_vbo);
+		glGenVertexArrays(1, &screen_quad_mesh_.vao);
+		glBindVertexArray(screen_quad_mesh_.vao);
+		glBindBuffer(GL_ARRAY_BUFFER, screen_quad_mesh_.vertex_vbo);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
 			sizeof(glm::vec2), 0);
@@ -148,11 +148,20 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	mPointShaderProgram.Init("resource:///point_vs.glsl", "resource:///point_fs.glsl");
 
 	mSpotShaderProgram.Init("resource:///spot_vs.glsl", "resource:///spot_fs.glsl");
+
+	mSSRShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///ssr_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
 	for (const auto& mesh : geometryBuilder.getAllMeshes())
+	{
+		////------------------------------
+		//if (mesh.getId() == 324 || mesh.getId() == 312)
+		//	mCurtains[mesh.getId()].Init(mesh);
+		////------------------------------		
+
 		mMeshes[mesh.getId()].Init(mesh);
+	}
 
 	// Setting OpenGL to cull mesh faces.
 	glEnable(GL_CULL_FACE);
@@ -164,7 +173,7 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	glGenTextures(1, &gbuffer_colour_tex_);
 	glGenTextures(1, &gbuffer_depth_tex_);
 	glGenFramebuffers(1, &gbuffer_fbo_);
-	glGenRenderbuffers(1, &lbuffer_colour_rbo_);
+	glGenTextures(1, &lbuffer_colour_tex_);
 	glGenFramebuffers(1, &lbuffer_fbo_);
 	//------------------------------------------------------------------
 }
@@ -208,13 +217,21 @@ void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 
 
 
-	glBindRenderbuffer(GL_RENDERBUFFER, lbuffer_colour_rbo_);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, mWidth, mHeight);
+	/*glBindRenderbuffer(GL_RENDERBUFFER, lbuffer_colour_tex_);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, mWidth, mHeight);*/
 
 	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
 
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, lbuffer_colour_rbo_);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_RECTANGLE, gbuffer_depth_tex_, 0);
+
+	glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_, 0);
+
+	GLenum buffers0[1] = { GL_COLOR_ATTACHMENT0};
+	glDrawBuffers(1, buffers);
+
+	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, lbuffer_colour_tex_);
 
 	status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);
@@ -240,8 +257,8 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	glDeleteTextures(1, &gbuffer_colour_tex_);
 	glDeleteTextures(1, &gbuffer_depth_tex_);
 	glDeleteFramebuffers(1, &gbuffer_fbo_);	
+	glDeleteTextures(1, &lbuffer_colour_tex_);
 	glDeleteFramebuffers(1, &lbuffer_fbo_);
-	glDeleteRenderbuffers(1, &lbuffer_colour_rbo_);
 	//----------------------------------------------------------------
 }
 
@@ -354,7 +371,7 @@ void MyView::windowViewRender(tygra::Window * window)
 	auto ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
 	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "cpp_AmbientIntensity"), 1, glm::value_ptr(ambientIntensity));
 
-	glBindVertexArray(light_quad_mesh_.vao);
+	glBindVertexArray(screen_quad_mesh_.vao);
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 	glBindVertexArray(0);	
 	//-----------------------------------------------------------------
@@ -381,7 +398,7 @@ void MyView::windowViewRender(tygra::Window * window)
 		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
 		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
 
-		glBindVertexArray(light_quad_mesh_.vao);
+		glBindVertexArray(screen_quad_mesh_.vao);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		glBindVertexArray(0);
 	}	
@@ -477,6 +494,32 @@ void MyView::windowViewRender(tygra::Window * window)
 	}
 
 	glCullFace(GL_BACK);
+	//-----------------------------------------------------------------
+
+
+	// SSR
+	//-----------------------------------------------------------------
+	mSSRShaderProgram.Use();
+
+	//glDisable(GL_BLEND);
+
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
+
+	glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
+	glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
+	glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));
+
+	glBindVertexArray(screen_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 	//-----------------------------------------------------------------
 
 

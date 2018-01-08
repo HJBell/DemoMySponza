@@ -27,7 +27,7 @@ struct DirectionalLight
 layout(std140) uniform cpp_PerFrameUniforms
 {
 	vec3 cpp_CameraPos;
-vec3 cpp_AmbientIntensity;
+	vec3 cpp_AmbientIntensity;
 };
 
 layout(std140) uniform cpp_PerModelUniforms
