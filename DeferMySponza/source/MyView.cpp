@@ -24,6 +24,11 @@ void MyView::setScene(const sponza::Context * sponza)
     mScene = sponza;
 }
 
+void MyView::ToggleSSR()
+{
+	mSSREnabled = !mSSREnabled;
+}
+
 
 //------------------------------------Private Functions-------------------------------------
 
@@ -531,34 +536,37 @@ void MyView::windowViewRender(tygra::Window * window)
 
 
 
+	if (mSSREnabled)
+	{
+		// SSR
+		//-----------------------------------------------------------------
+		mSSRShaderProgram.Use();
 
-	// SSR
-	//-----------------------------------------------------------------
-	mSSRShaderProgram.Use();
+		//glDisable(GL_BLEND);
 
-	//glDisable(GL_BLEND);
+		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_MaterialTex"), 3);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_material_tex_);
 
-	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
-	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
-	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
-	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_MaterialTex"), 3);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_material_tex_);
+		glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
+		glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
+		glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));	
 
-	glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
-	glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
-	glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));	
-
-	glBindVertexArray(screen_quad_mesh_.vao);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);
-	//-----------------------------------------------------------------
+		glBindVertexArray(screen_quad_mesh_.vao);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glBindVertexArray(0);
+		//-----------------------------------------------------------------
+	}
+	
 
 
 	// BLITTING THE LBUFFER TO THE SCREEN

@@ -19,18 +19,19 @@ public:
     ~MyView();
 
     void setScene(const sponza::Context * sponza);
+	void ToggleSSR();
 
 
 private:
 	int mWidth = 0;
 	int mHeight = 0;
+	bool mSSREnabled = false;
 
 	const sponza::Context * mScene;
 
 	std::map<sponza::MeshId, PerModelUniforms> mPerModelUniforms;
 	std::map<sponza::MeshId, MeshData> mMeshes;
 	std::map<sponza::MeshId, MeshData> mCurtains;
-
 
 	struct Mesh
 	{
