@@ -291,6 +291,7 @@
     <None Include="doc\readme.txt" />
   </ItemGroup>
   <ItemGroup>
+    <TygraShader Include="shaders\aa_fs.glsl" />
     <TygraShader Include="shaders\deffered_vs.glsl" />
     <TygraShader Include="shaders\ambient_fs.glsl" />
     <TygraShader Include="shaders\directional_fs.glsl" />

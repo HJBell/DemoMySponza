@@ -31,6 +31,7 @@ void MyController::windowControlWillStart(tygra::Window * window)
 	std::cout << "*************************************\n" << std::endl;
     std::cout << "  F2 - Toggle an animated camera" << std::endl;
 	std::cout << "  F3 - Toggle screen space reflections" << std::endl;
+	std::cout << "  F4 - Toggle anti aliasing" << std::endl;
 	std::cout << std::endl;
 }
 
@@ -114,6 +115,9 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
         break;
 	case tygra::kWindowKeyF3:
 		view_->ToggleSSR();
+		break;
+	case tygra::kWindowKeyF4:
+		view_->ToggleAA();
 		break;
 	case tygra::kWindowKeyEsc:
 		window->close();

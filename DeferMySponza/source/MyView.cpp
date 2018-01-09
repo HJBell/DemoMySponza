@@ -29,6 +29,11 @@ void MyView::ToggleSSR()
 	mSSREnabled = !mSSREnabled;
 }
 
+void MyView::ToggleAA()
+{
+	mAAEnabled = !mAAEnabled;
+}
+
 
 //------------------------------------Private Functions-------------------------------------
 
@@ -155,6 +160,8 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	mSpotShaderProgram.Init("resource:///spot_vs.glsl", "resource:///spot_fs.glsl");
 
 	mSSRShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///ssr_fs.glsl");
+
+	mAAShaderProgram.Init("resource:///deffered_vs.glsl", "resource:///aa_fs.glsl");
 	
 	// Load the mesh data.
 	sponza::GeometryBuilder geometryBuilder;
@@ -273,6 +280,8 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	mDirectionalShaderProgram.Dispose();
 	mPointShaderProgram.Dispose();
 	mSpotShaderProgram.Dispose();
+	mSSRShaderProgram.Dispose();
+	mAAShaderProgram.Dispose();
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
@@ -534,6 +543,30 @@ void MyView::windowViewRender(tygra::Window * window)
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
+
+
+	if (mAAEnabled)
+	{
+		// AA
+		//-----------------------------------------------------------------
+		mAAShaderProgram.Use();
+
+		//glDisable(GL_BLEND);
+
+		glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
+
+		glBindVertexArray(screen_quad_mesh_.vao);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glBindVertexArray(0);
+		//-----------------------------------------------------------------
+	}
+
+	//Copying the lbuffer to the postprocess buffer.
+	/*glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lbuffer_fbo_);
+	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);	*/
 
 
 	if (mSSREnabled)

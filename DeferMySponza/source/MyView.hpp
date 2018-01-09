@@ -20,12 +20,14 @@ public:
 
     void setScene(const sponza::Context * sponza);
 	void ToggleSSR();
+	void ToggleAA();
 
 
 private:
 	int mWidth = 0;
 	int mHeight = 0;
 	bool mSSREnabled = false;
+	bool mAAEnabled = false;
 
 	const sponza::Context * mScene;
 
@@ -51,6 +53,7 @@ private:
 	ShaderProgram mPointShaderProgram;
 	ShaderProgram mSpotShaderProgram;
 	ShaderProgram mSSRShaderProgram;
+	ShaderProgram mAAShaderProgram;
 
 
 	GLuint gbuffer_position_tex_{ 0 };

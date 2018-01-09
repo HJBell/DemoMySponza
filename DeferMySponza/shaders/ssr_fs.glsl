@@ -58,5 +58,5 @@ void main(void)
 		}
 	}	
 
-	fs_Colour = clamp(colour * 0.1, 0.0, 1.0);
+	fs_Colour = clamp(colour * 0.2, 0.0, 1.0);
 }
