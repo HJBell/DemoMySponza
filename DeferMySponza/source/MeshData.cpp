@@ -68,6 +68,9 @@ void MeshData::Init(const sponza::Mesh& mesh)
 
 	// Unbinding the VAO.
 	glBindVertexArray(0);
+
+	// Storing the mesh ID
+	mMeshID = mesh.getId();
 }
 
 void MeshData::Init(const std::vector<glm::vec3>& vertPositions)
@@ -102,6 +105,11 @@ GLsizei MeshData::GetElementCount() const
 {
 	// Returning the element count as a GLsizei.
 	return (GLsizei)mElementCount;
+}
+
+sponza::MeshId MeshData::GetMeshID() const
+{
+	return mMeshID;
 }
 
 void MeshData::Dispose()

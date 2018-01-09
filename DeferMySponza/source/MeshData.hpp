@@ -16,12 +16,14 @@ public:
 	void Init(const std::vector<glm::vec3>& vertPositions);
 	void BindVAO() const;
 	GLsizei GetElementCount() const;
+	sponza::MeshId GetMeshID() const;
 	void Dispose();
 
 private:
 	GLuint mVAO = 0;
 	std::map<std::string, GLuint> mVBOs;
 	size_t mElementCount = 0;
+	sponza::MeshId mMeshID = 0;
 	
 	GLuint GenerateBuffer(const void* data, GLsizeiptr size, GLenum bufferType, GLenum drawType) const;
 };

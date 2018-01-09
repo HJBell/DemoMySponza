@@ -155,11 +155,6 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	sponza::GeometryBuilder geometryBuilder;
 	for (const auto& mesh : geometryBuilder.getAllMeshes())
 	{
-		////------------------------------
-		//if (mesh.getId() == 324 || mesh.getId() == 312)
-		//	mCurtains[mesh.getId()].Init(mesh);
-		////------------------------------		
-
 		mMeshes[mesh.getId()].Init(mesh);
 	}
 
@@ -171,6 +166,7 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	glGenTextures(1, &gbuffer_position_tex_);
 	glGenTextures(1, &gbuffer_normal_tex_);
 	glGenTextures(1, &gbuffer_colour_tex_);
+	glGenTextures(1, &gbuffer_material_tex_);
 	glGenTextures(1, &gbuffer_depth_tex_);
 	glGenFramebuffers(1, &gbuffer_fbo_);
 	glGenTextures(1, &lbuffer_colour_tex_);
@@ -209,16 +205,20 @@ void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_, 0);
 
-	GLenum buffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glDrawBuffers(3, buffers);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_material_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_RECTANGLE, gbuffer_material_tex_, 0);
+
+	GLenum buffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+	glDrawBuffers(4, buffers);
 
 	auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);
 
 
 
-	/*glBindRenderbuffer(GL_RENDERBUFFER, lbuffer_colour_tex_);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, mWidth, mHeight);*/
+
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
 
@@ -229,12 +229,30 @@ void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_, 0);
 
 	GLenum buffers0[1] = { GL_COLOR_ATTACHMENT0};
-	glDrawBuffers(1, buffers);
-
-	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, lbuffer_colour_tex_);
+	glDrawBuffers(1, buffers0);
 
 	status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);
+
+
+
+
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, postprocess_fbo_);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_RECTANGLE, gbuffer_depth_tex_, 0);
+
+	glBindTexture(GL_TEXTURE_RECTANGLE, postprocess_colour_tex_);
+	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGB32F, mWidth, mHeight, 0, GL_RGB, GL_FLOAT, nullptr);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_RECTANGLE, postprocess_colour_tex_, 0);
+
+	GLenum buffers1[1] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, buffers1);
+
+	status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	assert(status == GL_FRAMEBUFFER_COMPLETE);
+
 	//-----------------------------------------------------------------
 }
 
@@ -256,9 +274,12 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	glDeleteTextures(1, &gbuffer_normal_tex_);
 	glDeleteTextures(1, &gbuffer_colour_tex_);
 	glDeleteTextures(1, &gbuffer_depth_tex_);
+	glDeleteTextures(1, &gbuffer_material_tex_);
 	glDeleteFramebuffers(1, &gbuffer_fbo_);	
 	glDeleteTextures(1, &lbuffer_colour_tex_);
 	glDeleteFramebuffers(1, &lbuffer_fbo_);
+	glDeleteTextures(1, &postprocess_colour_tex_);
+	glDeleteFramebuffers(1, &postprocess_fbo_);
 	//----------------------------------------------------------------
 }
 
@@ -319,7 +340,7 @@ void MyView::windowViewRender(tygra::Window * window)
 		}
 
 		// Adding the current meshes uniform buffer to the mPerModelUniforms data structure.
-		mPerModelUniforms.push_back(currentPerModelUniforms);
+		mPerModelUniforms[meshID] = currentPerModelUniforms;
 	}
 
 
@@ -342,7 +363,14 @@ void MyView::windowViewRender(tygra::Window * window)
 	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-	DrawMeshesInstanced(mGBufferShaderProgram);
+	//DrawMeshesInstanced(mGBufferShaderProgram);
+
+	for (const auto& mesh : mMeshes)
+	{
+		glUniform1i(glGetUniformLocation(mGBufferShaderProgram.mProgramID, "cpp_EnableSSR"), (int)(mesh.second.GetMeshID() == 311));
+		DrawMeshInstanced(mesh.second, mGBufferShaderProgram);
+	}
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//-----------------------------------------------------------------
@@ -495,6 +523,13 @@ void MyView::windowViewRender(tygra::Window * window)
 
 	glCullFace(GL_BACK);
 	//-----------------------------------------------------------------
+	
+	//Copying the lbuffer to the postprocess buffer.
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, lbuffer_fbo_);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
+	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+
 
 
 	// SSR
@@ -506,16 +541,19 @@ void MyView::windowViewRender(tygra::Window * window)
 	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
 	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
 	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_MaterialTex"), 3);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_material_tex_);
 
 	glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
 	glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
-	glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));
+	glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));	
 
 	glBindVertexArray(screen_quad_mesh_.vao);
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -525,6 +563,7 @@ void MyView::windowViewRender(tygra::Window * window)
 
 	// BLITTING THE LBUFFER TO THE SCREEN
 	//-----------------------------------------------------------------
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	//-----------------------------------------------------------------
@@ -573,8 +612,8 @@ void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
 		const auto instanceCount = instanceIDs.size();
 
 		// Populating the per model and texture uniform variables for the current mesh.
-		shaderProgram.SetUniformBuffer("cpp_PerModelUniforms", &(mPerModelUniforms[i]), sizeof((mPerModelUniforms[i])));
-
+		shaderProgram.SetUniformBuffer("cpp_PerModelUniforms", &(mPerModelUniforms.at(meshID)), sizeof(mPerModelUniforms.at(meshID)));
+		
 		// Binding the mesh and drawing it.
 		mesh.second.BindVAO();
 		glDrawElementsInstanced(GL_TRIANGLES, mesh.second.GetElementCount(), GL_UNSIGNED_INT, 0, (GLsizei)instanceCount);
@@ -582,4 +621,20 @@ void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
 
 		i++;
 	}
+}
+
+void MyView::DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgram) const
+{
+	const auto meshID = mesh.GetMeshID();
+	const auto instanceIDs = mScene->getInstancesByMeshId(meshID);
+	const auto instanceCount = instanceIDs.size();
+
+	// Populating the per model and texture uniform variables for the current mesh.
+	shaderProgram.SetUniformBuffer("cpp_PerModelUniforms", &(mPerModelUniforms.at(meshID)), sizeof(mPerModelUniforms.at(meshID)));
+
+	// Binding the mesh and drawing it.
+	mesh.BindVAO();
+
+	glDrawElementsInstanced(GL_TRIANGLES, mesh.GetElementCount(), GL_UNSIGNED_INT, 0, (GLsizei)instanceCount);
+	glBindVertexArray(0);
 }

@@ -41,6 +41,7 @@ layout(std140) uniform cpp_DirectionalLightUniforms
 };
 
 uniform sampler2D cpp_Texture;
+uniform int cpp_EnableSSR;
 
 
 //----------------------In Variables----------------------
@@ -56,6 +57,7 @@ flat in int vs_InstanceID;
 out vec3 fs_Position;
 out vec3 fs_Normal;
 out vec3 fs_Colour;
+out vec3 fs_Material;
 
 
 //----------------------Main Function----------------------
@@ -65,4 +67,5 @@ void main(void)
 	fs_Position = vs_Position;
 	fs_Normal = vs_Normal;
 	fs_Colour = cpp_Instances[vs_InstanceID].diffuse;
+	fs_Material = vec3(cpp_EnableSSR, 0.0, 0.0);
 }

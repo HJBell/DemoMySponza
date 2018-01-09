@@ -113,7 +113,7 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
         scene_->toggleCameraAnimation();
         break;
 	/*case tygra::kWindowKeyF3:
-		view_->ToggleSkybox();
+		view_->cycle();
 		break;*/
 	case tygra::kWindowKeyEsc:
 		window->close();

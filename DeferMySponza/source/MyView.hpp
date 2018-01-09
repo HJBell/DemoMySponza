@@ -18,7 +18,8 @@ public:
     MyView();
     ~MyView();
 
-    void setScene(const sponza::Context * sponza);	
+    void setScene(const sponza::Context * sponza);
+
 
 private:
 	int mWidth = 0;
@@ -26,7 +27,7 @@ private:
 
 	const sponza::Context * mScene;
 
-	std::vector<PerModelUniforms> mPerModelUniforms;
+	std::map<sponza::MeshId, PerModelUniforms> mPerModelUniforms;
 	std::map<sponza::MeshId, MeshData> mMeshes;
 	std::map<sponza::MeshId, MeshData> mCurtains;
 
@@ -55,16 +56,21 @@ private:
 	GLuint gbuffer_normal_tex_{ 0 };
 	GLuint gbuffer_colour_tex_{ 0 };
 	GLuint gbuffer_depth_tex_{ 0 };
+	GLuint gbuffer_material_tex_{ 0 };
 	GLuint gbuffer_fbo_{ 0 };
 
 	GLuint lbuffer_fbo_{ 0 };
 	GLuint lbuffer_colour_tex_{ 0 };
+
+	GLuint postprocess_fbo_{ 0 };
+	GLuint postprocess_colour_tex_{ 0 };
 
     void windowViewWillStart(tygra::Window * window) override;
     void windowViewDidReset(tygra::Window * window, int width, int height) override;
     void windowViewDidStop(tygra::Window * window) override;
     void windowViewRender(tygra::Window * window) override;
 	void DrawMeshesInstanced(ShaderProgram& shaderProgram) const;
+	void DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgram) const;
 };
 
 
