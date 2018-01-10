@@ -34,6 +34,12 @@ void MyView::ToggleAA()
 	mAAEnabled = !mAAEnabled;
 }
 
+void MyView::ToggleSkybox()
+{
+	mSkyboxEnabled = !mSkyboxEnabled;
+}
+
+
 
 //------------------------------------Private Functions-------------------------------------
 
@@ -147,6 +153,9 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	// Terminating the program if 'scene_' is null.
     assert(mScene != nullptr);
 	
+	mSkyboxShaderProgram.Init("resource:///skybox_vs.glsl", "resource:///skybox_fs.glsl");
+	mSkyboxShaderProgram.CreateUniformBuffer("cpp_SkyboxUniforms", sizeof(SkyboxUniforms), 2);
+
 	mGBufferShaderProgram.Init("resource:///gbuffer_vs.glsl", "resource:///gbuffer_fs.glsl", true);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerFrameUniforms", sizeof(PerFrameUniforms), 0);
 	mGBufferShaderProgram.CreateUniformBuffer("cpp_PerModelUniforms", sizeof(PerModelUniforms), 1);
@@ -169,6 +178,15 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	{
 		mMeshes[mesh.getId()].Init(mesh);
 	}
+
+	// Initialising the skybox mesh.
+	mSkyboxMesh.Init(CubeVerts);
+
+	// Loading textures.
+	LoadTexture("resource:///hex.png", "Hex");
+	LoadTexture("resource:///marble.png", "Marble");
+	LoadTextureCube("resource:///skybox_stormy_", "Skybox");
+
 
 	// Setting OpenGL to cull mesh faces.
 	glEnable(GL_CULL_FACE);
@@ -275,6 +293,7 @@ void MyView::windowViewDidStop(tygra::Window * window)
 		mesh.second.Dispose();
 
 	// Disposing of the shader programs.
+	mSkyboxShaderProgram.Dispose();
 	mGBufferShaderProgram.Dispose();
 	mAmbientShaderProgram.Dispose();
 	mDirectionalShaderProgram.Dispose();
@@ -282,6 +301,10 @@ void MyView::windowViewDidStop(tygra::Window * window)
 	mSpotShaderProgram.Dispose();
 	mSSRShaderProgram.Dispose();
 	mAAShaderProgram.Dispose();
+
+	// Deleting the textures.
+	for (const auto& tex : mTextures)
+		glDeleteTextures(1, &tex.second);
 
 	//----------------------------------------------------------------
 	glDeleteTextures(1, &gbuffer_position_tex_);
@@ -361,30 +384,27 @@ void MyView::windowViewRender(tygra::Window * window)
 	// CREATING THE GBUFFER
 	//-----------------------------------------------------------------
 	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
-	glDisable(GL_STENCIL_TEST);
-	glDisable(GL_BLEND);
 
 	mGBufferShaderProgram.Use();
+
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
-	glClearStencil(128);
 	glEnable(GL_STENCIL_TEST);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 	glStencilFunc(GL_ALWAYS, 0, ~0);
 	glStencilMask(~0);
-
-	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glClearStencil(128);
 
 	mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-	//DrawMeshesInstanced(mGBufferShaderProgram);
 
 	for (const auto& mesh : mMeshes)
 	{
 		glUniform1i(glGetUniformLocation(mGBufferShaderProgram.mProgramID, "cpp_EnableSSR"), (int)(mesh.second.GetMeshID() == 311));
 		DrawMeshInstanced(mesh.second, mGBufferShaderProgram);
 	}
-
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//-----------------------------------------------------------------
@@ -400,6 +420,41 @@ void MyView::windowViewRender(tygra::Window * window)
 	glStencilFunc(GL_EQUAL, 0, ~0);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 	//-----------------------------------------------------------------
+
+
+	if(mSkyboxEnabled)
+	{
+		// Carrying out an initial pass to draw the skybox if required.
+		//-----------------------------------------------------------------
+		// Setting the skybox shader program to be active and configuring OpenGL for the pass.
+		mSkyboxShaderProgram.Use();
+		glDisable(GL_BLEND);
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_STENCIL_TEST);
+		glStencilFunc(GL_NOTEQUAL, 0, ~0);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+		// Populating the skybox shaders uniform variables.
+		SkyboxUniforms skyboxUniforms;
+		skyboxUniforms.cameraPos = (const glm::vec3 &)camera.getPosition();
+		skyboxUniforms.viewProjectionXform = projection * view;
+		mSkyboxShaderProgram.SetUniformBuffer("cpp_SkyboxUniforms", &skyboxUniforms, sizeof(skyboxUniforms));
+		mSkyboxShaderProgram.SetTextureCubeUniform(mTextures["Skybox"], "cpp_CubeMap");
+
+		// Binding the skybox VAO and drawing.
+		mSkyboxMesh.BindVAO();
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+		glBindVertexArray(0);
+
+		glEnable(GL_STENCIL_TEST);
+		glStencilFunc(GL_EQUAL, 0, ~0);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+		
+
+		//-----------------------------------------------------------------
+	}
+	
+
 
 
 	// AMBIENT
@@ -544,6 +599,13 @@ void MyView::windowViewRender(tygra::Window * window)
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 
+
+	glDisable(GL_STENCIL_TEST);
+
+
+
+
+
 	if (mSSREnabled)
 	{
 		// SSR
@@ -591,14 +653,14 @@ void MyView::windowViewRender(tygra::Window * window)
 		// AA
 		//-----------------------------------------------------------------
 		mAAShaderProgram.Use();
-
+		
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
 		glDisable(GL_BLEND);
-
+		
 		glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
-
+		
 		glBindVertexArray(screen_quad_mesh_.vao);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		glBindVertexArray(0);
@@ -606,49 +668,18 @@ void MyView::windowViewRender(tygra::Window * window)
 	}
 
 	
-
+	if(mSkyboxEnabled)
+		glActiveTexture(GL_TEXTURE0);
 
 	
 	
 
 
-	// BLITTING THE LBUFFER TO THE SCREEN
+	// BLITTING TO THE SCREEN
 	//-----------------------------------------------------------------
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-	//-----------------------------------------------------------------
-
-	
-
-
-	// SHADING THE SCENE
-	//-----------------------------------------------------------------
-	/*glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
-	glClearColor(0.f, 0.f, 0.25f, 1.f);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_STENCIL_TEST);
-	glStencilFunc(GL_EQUAL, 0, ~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-	mAmbientShaderProgram.Use();
-
-	glUniform1i(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "sampler_world_position"), 0);
-	glUniform1i(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "sampler_world_normal"), 1);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-	const glm::vec3 global_light_direction = glm::normalize(glm::vec3(-3.f, -2.f, 1.f));
-	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "light_direction"), 1, glm::value_ptr(global_light_direction));
-
-	glBindVertexArray(light_quad_mesh_.vao);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);
-
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);*/
 	//-----------------------------------------------------------------
 }
 
@@ -682,10 +713,80 @@ void MyView::DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgra
 
 	// Populating the per model and texture uniform variables for the current mesh.
 	shaderProgram.SetUniformBuffer("cpp_PerModelUniforms", &(mPerModelUniforms.at(meshID)), sizeof(mPerModelUniforms.at(meshID)));
+	shaderProgram.SetTextureUniform(mTextures.at("Marble"), "cpp_Texture");
 
 	// Binding the mesh and drawing it.
 	mesh.BindVAO();
 
 	glDrawElementsInstanced(GL_TRIANGLES, mesh.GetElementCount(), GL_UNSIGNED_INT, 0, (GLsizei)instanceCount);
 	glBindVertexArray(0);
+}
+
+void MyView::LoadTexture(std::string path, std::string name)
+{
+	//Checking the texture is not already loaded.
+	if (mTextures.find(path) != mTextures.end()) return;
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	//Loading the texture.
+	tygra::Image texture = tygra::createImageFromPngFile(path);
+
+	//Checking the texture contains data.
+	if (texture.doesContainData())
+	{
+		//Loading the texture and storing its ID in the 'textures' map.
+		glGenTextures(1, &mTextures[name]);
+		glBindTexture(GL_TEXTURE_2D, mTextures[name]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		GLenum pixel_formats[] = { 0, GL_RED, GL_RG, GL_RGB, GL_RGBA };
+
+		glTexImage2D(GL_TEXTURE_2D,
+			0,
+			GL_RGBA,
+			(GLsizei)texture.width(),
+			(GLsizei)texture.height(),
+			0,
+			pixel_formats[texture.componentsPerPixel()],
+			texture.bytesPerComponent() == 1 ? GL_UNSIGNED_BYTE
+			: GL_UNSIGNED_SHORT,
+			texture.pixelData());
+
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+	else std::cerr << "Warning : Texture '" << path << "' does not contain any data." << std::endl;
+}
+
+void MyView::LoadTextureCube(std::string path, std::string name)
+{
+	// Checking the texture is not already loaded.
+	if (mTextures.find(path) != mTextures.end()) return;
+
+	// Generating the texture cube.
+	glGenTextures(1, &mTextures[name]);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, mTextures[name]);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+	// Loading each texture to be used as a face for the texture cube.
+	for (size_t i = 0; i < 6; ++i) {
+		const std::string url = path + std::to_string(i) + ".png";
+		tygra::Image img = tygra::createImageFromPngFile(url);
+		if (!img.doesContainData()) {
+			throw std::runtime_error("failed to load " + url);
+		}
+		GLenum pixel_formats[] = { 0, GL_RED, GL_RG, GL_RGB, GL_RGBA };
+		glTexImage2D((GLenum)(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i), 0, GL_RGBA, (GLsizei)img.width(), (GLsizei)img.height(), 0,
+			pixel_formats[img.componentsPerPixel()],
+			img.bytesPerComponent() == 1 ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT, img.pixelData());
+	}
+	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 }

@@ -21,6 +21,7 @@ public:
     void setScene(const sponza::Context * sponza);
 	void ToggleSSR();
 	void ToggleAA();
+	void ToggleSkybox();
 
 
 private:
@@ -28,12 +29,15 @@ private:
 	int mHeight = 0;
 	bool mSSREnabled = false;
 	bool mAAEnabled = false;
+	bool mSkyboxEnabled = false;
 
 	const sponza::Context * mScene;
 
 	std::map<sponza::MeshId, PerModelUniforms> mPerModelUniforms;
+	std::map<std::string, GLuint> mTextures;
+
 	std::map<sponza::MeshId, MeshData> mMeshes;
-	std::map<sponza::MeshId, MeshData> mCurtains;
+	MeshData mSkyboxMesh;	
 
 	struct Mesh
 	{
@@ -47,6 +51,7 @@ private:
 	Mesh light_sphere_mesh_; // element array into vec3 position
 	Mesh light_cone_mesh_;
 
+	ShaderProgram mSkyboxShaderProgram;
 	ShaderProgram mGBufferShaderProgram;
 	ShaderProgram mAmbientShaderProgram;
 	ShaderProgram mDirectionalShaderProgram;
@@ -75,6 +80,8 @@ private:
     void windowViewRender(tygra::Window * window) override;
 	void DrawMeshesInstanced(ShaderProgram& shaderProgram) const;
 	void DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgram) const;
+	void LoadTexture(std::string path, std::string name);
+	void LoadTextureCube(std::string path, std::string name);
 };
 
 

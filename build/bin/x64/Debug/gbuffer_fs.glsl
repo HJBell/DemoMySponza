@@ -66,6 +66,6 @@ void main(void)
 {	
 	fs_Position = vs_Position;
 	fs_Normal = vs_Normal;
-	fs_Colour = cpp_Instances[vs_InstanceID].diffuse;
+	fs_Colour = cpp_Instances[vs_InstanceID].diffuse * texture(cpp_Texture, vs_TextureCoord).rgb;
 	fs_Material = vec3(cpp_EnableSSR, 0.0, 0.0);
 }

@@ -93,5 +93,11 @@
     <TygraShader Include="shaders\aa_fs.glsl">
       <Filter>Shader Files</Filter>
     </TygraShader>
+    <TygraShader Include="shaders\skybox_fs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
+    <TygraShader Include="shaders\skybox_vs.glsl">
+      <Filter>Shader Files</Filter>
+    </TygraShader>
   </ItemGroup>
 </Project>

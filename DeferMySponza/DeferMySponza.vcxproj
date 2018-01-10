@@ -299,6 +299,8 @@
     <TygraShader Include="shaders\gbuffer_vs.glsl" />
     <TygraShader Include="shaders\point_fs.glsl" />
     <TygraShader Include="shaders\point_vs.glsl" />
+    <TygraShader Include="shaders\skybox_fs.glsl" />
+    <TygraShader Include="shaders\skybox_vs.glsl" />
     <TygraShader Include="shaders\spot_fs.glsl" />
     <TygraShader Include="shaders\spot_vs.glsl" />
     <TygraShader Include="shaders\ssr_fs.glsl" />

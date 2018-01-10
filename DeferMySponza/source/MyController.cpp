@@ -119,6 +119,9 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
 	case tygra::kWindowKeyF4:
 		view_->ToggleAA();
 		break;
+	case tygra::kWindowKeyF5:
+		view_->ToggleSkybox();
+		break;
 	case tygra::kWindowKeyEsc:
 		window->close();
 		break;
