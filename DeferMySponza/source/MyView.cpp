@@ -544,37 +544,14 @@ void MyView::windowViewRender(tygra::Window * window)
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 
-
-	if (mAAEnabled)
-	{
-		// AA
-		//-----------------------------------------------------------------
-		mAAShaderProgram.Use();
-
-		//glDisable(GL_BLEND);
-
-		glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
-
-		glBindVertexArray(screen_quad_mesh_.vao);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-		glBindVertexArray(0);
-		//-----------------------------------------------------------------
-	}
-
-	//Copying the lbuffer to the postprocess buffer.
-	/*glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lbuffer_fbo_);
-	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);	*/
-
-
 	if (mSSREnabled)
 	{
 		// SSR
 		//-----------------------------------------------------------------
 		mSSRShaderProgram.Use();
 
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
+		glEnable(GL_BLEND);
 		//glDisable(GL_BLEND);
 
 		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
@@ -592,13 +569,46 @@ void MyView::windowViewRender(tygra::Window * window)
 
 		glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
 		glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
-		glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));	
+		glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));
+
+		glBindVertexArray(screen_quad_mesh_.vao);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glBindVertexArray(0);
+
+
+		//Copying the lbuffer to the postprocess buffer.
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lbuffer_fbo_);
+		glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+		//-----------------------------------------------------------------
+	}
+
+
+
+	if (mAAEnabled)
+	{
+		// AA
+		//-----------------------------------------------------------------
+		mAAShaderProgram.Use();
+
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
+		glDisable(GL_BLEND);
+
+		glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
 
 		glBindVertexArray(screen_quad_mesh_.vao);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		glBindVertexArray(0);
 		//-----------------------------------------------------------------
 	}
+
+	
+
+
+	
 	
 
 
