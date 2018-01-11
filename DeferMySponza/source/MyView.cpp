@@ -24,19 +24,9 @@ void MyView::setScene(const sponza::Context * sponza)
     mScene = sponza;
 }
 
-void MyView::ToggleSSR()
+void MyView::ToggleFeature(TogglableFeature feature)
 {
-	mSSREnabled = !mSSREnabled;
-}
-
-void MyView::ToggleAA()
-{
-	mAAEnabled = !mAAEnabled;
-}
-
-void MyView::ToggleSkybox()
-{
-	mSkyboxEnabled = !mSkyboxEnabled;
+	mFeatureIsEnabled[feature] = !mFeatureIsEnabled[feature];
 }
 
 
@@ -202,6 +192,13 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	glGenTextures(1, &lbuffer_colour_tex_);
 	glGenFramebuffers(1, &lbuffer_fbo_);
 	//------------------------------------------------------------------
+
+	mFeatureIsEnabled[DirectionalLight] = true;
+	mFeatureIsEnabled[PointLights] = true;
+	mFeatureIsEnabled[SpotLights] = true;
+	mFeatureIsEnabled[ScreenSpaceReflection] = false;
+	mFeatureIsEnabled[AntiAliasing] = false;
+	mFeatureIsEnabled[Skybox] = false;
 }
 
 void MyView::windowViewDidReset(tygra::Window * window, int width, int height)
@@ -330,23 +327,20 @@ void MyView::windowViewRender(tygra::Window * window)
 	glGetIntegerv(GL_VIEWPORT, viewportSize);
 	const float aspectRatio = viewportSize[2] / (float)viewportSize[3];
 
-	// Creating the per frame and per model structs.
-	PerFrameUniforms perFrameUniforms;
-
 	// Getting the camera data for the frame.
 	sponza::Camera camera = mScene->getCamera();
 	auto camDir = (const glm::vec3 &)camera.getDirection();
 	auto upDir = (const glm::vec3 &)mScene->getUpDirection();
 
 	// Populating the per frame uniform buffer.
-	perFrameUniforms.cameraPos = (const glm::vec3 &)camera.getPosition();
-	perFrameUniforms.ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
+	mPerFrameUniforms.cameraPos = (const glm::vec3 &)camera.getPosition();
+	mPerFrameUniforms.ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
 
 	// Calculating the projection and view matrices.
 	glm::mat4 projection = glm::perspective(glm::radians(camera.getVerticalFieldOfViewInDegrees()),
 		aspectRatio, camera.getNearPlaneDistance(),
 		camera.getFarPlaneDistance());	
-	glm::mat4 view = glm::lookAt(perFrameUniforms.cameraPos, perFrameUniforms.cameraPos + camDir, upDir);
+	glm::mat4 view = glm::lookAt(mPerFrameUniforms.cameraPos, mPerFrameUniforms.cameraPos + camDir, upDir);
 
 	// Looping through the meshes in the scene and capturing their uniform properties for the frame.
 	mPerModelUniforms.clear();
@@ -380,310 +374,53 @@ void MyView::windowViewRender(tygra::Window * window)
 		mPerModelUniforms[meshID] = currentPerModelUniforms;
 	}
 
+	// Rendering the GBuffer.
+	RenderGBuffer();
 
-	// CREATING THE GBUFFER
-	//-----------------------------------------------------------------
-	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
-
-	mGBufferShaderProgram.Use();
-
-	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-	glDepthMask(GL_TRUE);
-	glDepthFunc(GL_LESS);
-	glEnable(GL_STENCIL_TEST);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-	glStencilFunc(GL_ALWAYS, 0, ~0);
-	glStencilMask(~0);
-	glClearStencil(128);
-
-	mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &perFrameUniforms, sizeof(perFrameUniforms));
-
-	for (const auto& mesh : mMeshes)
-	{
-		glUniform1i(glGetUniformLocation(mGBufferShaderProgram.mProgramID, "cpp_EnableSSR"), (int)(mesh.second.GetMeshID() == 311));
-		DrawMeshInstanced(mesh.second, mGBufferShaderProgram);
-	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	//-----------------------------------------------------------------
-
-
-	// BIND AND CONFIGURE THE LBUFFER
-	//-----------------------------------------------------------------
+	// Clearing the LBuffer.
 	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
 	glClearColor(0.f, 0.f, 0.25f, 1.f);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_STENCIL_TEST);
-	glStencilFunc(GL_EQUAL, 0, ~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	//-----------------------------------------------------------------
 
-
-	if(mSkyboxEnabled)
-	{
-		// Carrying out an initial pass to draw the skybox if required.
-		//-----------------------------------------------------------------
-		// Setting the skybox shader program to be active and configuring OpenGL for the pass.
-		mSkyboxShaderProgram.Use();
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
-		glEnable(GL_STENCIL_TEST);
-		glStencilFunc(GL_NOTEQUAL, 0, ~0);
-		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-		// Populating the skybox shaders uniform variables.
-		SkyboxUniforms skyboxUniforms;
-		skyboxUniforms.cameraPos = (const glm::vec3 &)camera.getPosition();
-		skyboxUniforms.viewProjectionXform = projection * view;
-		mSkyboxShaderProgram.SetUniformBuffer("cpp_SkyboxUniforms", &skyboxUniforms, sizeof(skyboxUniforms));
-		mSkyboxShaderProgram.SetTextureCubeUniform(mTextures["Skybox"], "cpp_CubeMap");
-
-		// Binding the skybox VAO and drawing.
-		mSkyboxMesh.BindVAO();
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-		glBindVertexArray(0);
-
-		glEnable(GL_STENCIL_TEST);
-		glStencilFunc(GL_EQUAL, 0, ~0);
-		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-		
-
-		//-----------------------------------------------------------------
-	}
+	// Skybox.
+	if(mFeatureIsEnabled[Skybox]) RenderSkybox(lbuffer_fbo_, mPerFrameUniforms.cameraPos, projection * view);
 	
+	// Amient light.	
+	RenderAmbientLight(lbuffer_fbo_, gbuffer_colour_tex_);
 
+	// Directional lights.
+	if (mFeatureIsEnabled[DirectionalLight]) RenderDirectionalLights(lbuffer_fbo_, gbuffer_normal_tex_);
 
+	// Point lights.
+	if (mFeatureIsEnabled[PointLights]) RenderPointLights(lbuffer_fbo_, gbuffer_colour_tex_, gbuffer_position_tex_, gbuffer_normal_tex_, projection * view);
 
-	// AMBIENT
-	//-----------------------------------------------------------------
-	mAmbientShaderProgram.Use();
-
-	glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_ColourTex"), 0);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
-
-	auto ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
-	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "cpp_AmbientIntensity"), 1, glm::value_ptr(ambientIntensity));
-
-	glBindVertexArray(screen_quad_mesh_.vao);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glBindVertexArray(0);	
-	//-----------------------------------------------------------------
-
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-	glBlendEquation(GL_FUNC_ADD);
-
-
-	// DIRECTIONAL
-	//-----------------------------------------------------------------
-	mDirectionalShaderProgram.Use();
-	auto directionalLights = mScene->getAllDirectionalLights();
-	for (auto light : directionalLights)
-	{
-		auto lightDir = (const glm::vec3 &)light.getDirection();
-		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
-
-		glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_NormalTex"), 0);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-
-		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
-		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
-
-		glBindVertexArray(screen_quad_mesh_.vao);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-		glBindVertexArray(0);
-	}	
-	//-----------------------------------------------------------------
-
-
-	// POINT
-	//-----------------------------------------------------------------
-	mPointShaderProgram.Use();
-
-	glCullFace(GL_FRONT);
-
-	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_PositionTex"), 0);
-	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_NormalTex"), 1);
-	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_ColourTex"), 2);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
-
-	auto pointLights = mScene->getAllPointLights();
-	for (auto light : pointLights)
-	{
-		auto lightPos = (const glm::vec3 &)light.getPosition();
-		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
-		auto lightRange = light.getRange();
-
-		auto t = glm::translate(glm::mat4(), lightPos);
-		auto s = glm::scale(glm::mat4(), glm::vec3(lightRange, lightRange, lightRange));
-		auto model = t * s;
-		auto mvp = projection * view * model;
-
-		glUniformMatrix4fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
-
-		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
-		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
-		glUniform1f(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
-
-		glBindVertexArray(light_sphere_mesh_.vao);
-		glDrawElements(GL_TRIANGLES, light_sphere_mesh_.element_count, GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
-	}
-
-	glCullFace(GL_BACK);
-	//-----------------------------------------------------------------
-
-
-	// SPOT
-	//-----------------------------------------------------------------
-	mSpotShaderProgram.Use();
-
-	glCullFace(GL_FRONT);
-
-	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_PositionTex"), 0);
-	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_NormalTex"), 1);
-	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_ColourTex"), 2);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_colour_tex_);
-
-	auto spotLights = mScene->getAllSpotLights();
-	for (auto light : spotLights)
-	{
-		auto lightPos = (const glm::vec3 &)light.getPosition();
-		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
-		auto lightRange = light.getRange();
-		auto lightAngle = glm::radians(light.getConeAngleDegrees()) / 2.f;
-		auto lightDir = glm::normalize((const glm::vec3 &)light.getDirection());
-
-		auto t = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -1.f));
-		auto radius = glm::tan(lightAngle) * lightRange;
-		auto s = glm::scale(glm::mat4(), glm::vec3(radius, radius, lightRange));
-		auto r = glm::inverse(glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(0.f, 1.f, 0.f)));
-		auto model = r * s * t;
-		auto mvp = projection * view * model;
-
-		glUniformMatrix4fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
-
-		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
-		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
-		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
-		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightAngle"), lightAngle);
-		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
-
-		glBindVertexArray(light_cone_mesh_.vao);
-		glDrawElements(GL_TRIANGLES, light_cone_mesh_.element_count, GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
-	}
-
-	glCullFace(GL_BACK);
-	//-----------------------------------------------------------------
+	// Spot lights.
+	if (mFeatureIsEnabled[SpotLights]) RenderSpotLights(lbuffer_fbo_, gbuffer_colour_tex_, gbuffer_position_tex_, gbuffer_normal_tex_, projection * view);
 	
 	//Copying the lbuffer to the postprocess buffer.
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, lbuffer_fbo_);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-
-
-	glDisable(GL_STENCIL_TEST);
-
-
-
-
-
-	if (mSSREnabled)
+	// Screen space reflections.
+	if (mFeatureIsEnabled[ScreenSpaceReflection])
 	{
-		// SSR
-		//-----------------------------------------------------------------
-		mSSRShaderProgram.Use();
-
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
-		glEnable(GL_BLEND);
-		//glDisable(GL_BLEND);
-
-		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
-		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
-		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
-		glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_MaterialTex"), 3);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_position_tex_);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_normal_tex_);
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
-		glActiveTexture(GL_TEXTURE3);
-		glBindTexture(GL_TEXTURE_RECTANGLE, gbuffer_material_tex_);
-
-		glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
-		glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(perFrameUniforms.cameraPos));
-		glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(projection * view));
-
-		glBindVertexArray(screen_quad_mesh_.vao);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-		glBindVertexArray(0);
-
-
-		//Copying the lbuffer to the postprocess buffer.
+		PostProc_SSR(postprocess_fbo_, lbuffer_colour_tex_, gbuffer_position_tex_, gbuffer_normal_tex_, gbuffer_material_tex_, mPerFrameUniforms.cameraPos, projection * view);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lbuffer_fbo_);
 		glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-		//-----------------------------------------------------------------
 	}
 
-
-
-	if (mAAEnabled)
-	{
-		// AA
-		//-----------------------------------------------------------------
-		mAAShaderProgram.Use();
-		
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, postprocess_fbo_);
-		glDisable(GL_BLEND);
-		
-		glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_RECTANGLE, lbuffer_colour_tex_);
-		
-		glBindVertexArray(screen_quad_mesh_.vao);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-		glBindVertexArray(0);
-		//-----------------------------------------------------------------
-	}
-
+	// Anti aliasing.
+	if (mFeatureIsEnabled[AntiAliasing]) PostProc_AA(postprocess_fbo_, lbuffer_colour_tex_);
 	
-	if(mSkyboxEnabled)
-		glActiveTexture(GL_TEXTURE0);
-
-	
-	
-
-
-	// BLITTING TO THE SCREEN
-	//-----------------------------------------------------------------
+	// Blitting to the screen
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, postprocess_fbo_);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, mWidth, mHeight, 0, 0, mWidth, mHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-	//-----------------------------------------------------------------
 }
 
-void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
+void MyView::DrawMeshesInstanced(const ShaderProgram& shaderProgram) const
 {
 	// Looping through each mesh in the scene and drawing it (instanced).
 	int i = 0;
@@ -705,7 +442,7 @@ void MyView::DrawMeshesInstanced(ShaderProgram& shaderProgram) const
 	}
 }
 
-void MyView::DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgram) const
+void MyView::DrawMeshInstanced(const MeshData& mesh, const ShaderProgram& shaderProgram) const
 {
 	const auto meshID = mesh.GetMeshID();
 	const auto instanceIDs = mScene->getInstancesByMeshId(meshID);
@@ -789,4 +526,266 @@ void MyView::LoadTextureCube(std::string path, std::string name)
 	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+}
+
+
+//------------------------------------------------------------------------------
+
+void MyView::RenderGBuffer() const
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer_fbo_);
+
+	mGBufferShaderProgram.Use();
+
+	glCullFace(GL_BACK);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LESS);
+	glEnable(GL_STENCIL_TEST);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+	glStencilFunc(GL_ALWAYS, 0, ~0);
+	glStencilMask(~0);
+	glClearStencil(128);
+
+	mGBufferShaderProgram.SetUniformBuffer("cpp_PerFrameUniforms", &mPerFrameUniforms, sizeof(mPerFrameUniforms));
+
+	for (const auto& mesh : mMeshes)
+	{
+		glUniform1i(glGetUniformLocation(mGBufferShaderProgram.mProgramID, "cpp_EnableSSR"), (int)(mesh.second.GetMeshID() == 311));
+		DrawMeshInstanced(mesh.second, mGBufferShaderProgram);
+	}
+}
+
+void MyView::RenderSkybox(GLuint targetFBO, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const
+{
+	mSkyboxShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_NOTEQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	glActiveTexture(GL_TEXTURE0);
+
+	// Populating the skybox shaders uniform variables.
+	SkyboxUniforms skyboxUniforms;
+	skyboxUniforms.cameraPos = cameraPos;
+	skyboxUniforms.viewProjectionXform = vpMatrix;
+	mSkyboxShaderProgram.SetUniformBuffer("cpp_SkyboxUniforms", &skyboxUniforms, sizeof(skyboxUniforms));
+	mSkyboxShaderProgram.SetTextureCubeUniform(mTextures.at("Skybox"), "cpp_CubeMap");
+
+	// Binding the skybox VAO and drawing.
+	mSkyboxMesh.BindVAO();
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	glBindVertexArray(0);
+
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+}
+
+void MyView::RenderAmbientLight(GLuint targetFBO, GLuint colTex) const
+{
+	mAmbientShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glDisable(GL_DEPTH_TEST);
+	glCullFace(GL_BACK);
+	glDisable(GL_BLEND);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_ColourTex"), 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, colTex);
+
+	auto ambientIntensity = (const glm::vec3 &)mScene->getAmbientLightIntensity();
+	glUniform3fv(glGetUniformLocation(mAmbientShaderProgram.mProgramID, "cpp_AmbientIntensity"), 1, glm::value_ptr(ambientIntensity));
+
+	glBindVertexArray(screen_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
+}
+
+void MyView::RenderDirectionalLights(GLuint targetFBO, GLuint normTex) const
+{
+	mDirectionalShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glCullFace(GL_BACK);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBlendEquation(GL_FUNC_ADD);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	auto directionalLights = mScene->getAllDirectionalLights();
+	for (auto light : directionalLights)
+	{
+		auto lightDir = (const glm::vec3 &)light.getDirection();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+
+		glUniform1i(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_NormalTex"), 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_RECTANGLE, normTex);
+
+		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
+		glUniform3fv(glGetUniformLocation(mDirectionalShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+
+		glBindVertexArray(screen_quad_mesh_.vao);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glBindVertexArray(0);
+	}
+}
+
+void MyView::RenderPointLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const
+{
+	mPointShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glCullFace(GL_FRONT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBlendEquation(GL_FUNC_ADD);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, posTex);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, normTex);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, colTex);
+
+	auto pointLights = mScene->getAllPointLights();
+	for (auto light : pointLights)
+	{
+		auto lightPos = (const glm::vec3 &)light.getPosition();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+		auto lightRange = light.getRange();
+
+		auto t = glm::translate(glm::mat4(), lightPos);
+		auto s = glm::scale(glm::mat4(), glm::vec3(lightRange, lightRange, lightRange));
+		auto model = t * s;
+		auto mvp = vpMatrix * model;
+
+		glUniformMatrix4fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
+
+		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
+		glUniform3fv(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+		glUniform1f(glGetUniformLocation(mPointShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
+
+		glBindVertexArray(light_sphere_mesh_.vao);
+		glDrawElements(GL_TRIANGLES, light_sphere_mesh_.element_count, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+}
+
+void MyView::RenderSpotLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const
+{
+	mSpotShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glCullFace(GL_FRONT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBlendEquation(GL_FUNC_ADD);
+	glEnable(GL_STENCIL_TEST);
+	glStencilFunc(GL_EQUAL, 0, ~0);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, posTex);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, normTex);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, colTex);
+
+	auto spotLights = mScene->getAllSpotLights();
+	for (auto light : spotLights)
+	{
+		auto lightPos = (const glm::vec3 &)light.getPosition();
+		auto lightIntensity = (const glm::vec3 &)light.getIntensity();
+		auto lightRange = light.getRange();
+		auto lightAngle = glm::radians(light.getConeAngleDegrees()) / 2.f;
+		auto lightDir = glm::normalize((const glm::vec3 &)light.getDirection());
+
+		auto t = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -1.f));
+		auto radius = glm::tan(lightAngle) * lightRange;
+		auto s = glm::scale(glm::mat4(), glm::vec3(radius, radius, lightRange));
+		auto r = glm::inverse(glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(0.f, 1.f, 0.f)));
+		auto model = r * s * t;
+		auto mvp = vpMatrix * model;
+
+		glUniformMatrix4fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_MVP"), 1, false, glm::value_ptr(mvp));
+
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightPos"), 1, glm::value_ptr(lightPos));
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightIntensity"), 1, glm::value_ptr(lightIntensity));
+		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightRange"), lightRange);
+		glUniform1f(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightAngle"), lightAngle);
+		glUniform3fv(glGetUniformLocation(mSpotShaderProgram.mProgramID, "cpp_LightDir"), 1, glm::value_ptr(lightDir));
+
+		glBindVertexArray(light_cone_mesh_.vao);
+		glDrawElements(GL_TRIANGLES, light_cone_mesh_.element_count, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+	}
+}
+
+void MyView::PostProc_SSR(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, GLuint matTex, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const
+{
+	mSSRShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glEnable(GL_BLEND);
+	glCullFace(GL_BACK);
+
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_PositionTex"), 0);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_NormalTex"), 1);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ColourTex"), 2);
+	glUniform1i(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_MaterialTex"), 3);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, posTex);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_RECTANGLE, normTex);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_RECTANGLE, colTex);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_RECTANGLE, matTex);
+
+	glUniform2fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_WindowDims"), 1, glm::value_ptr(glm::vec2(mWidth, mHeight)));
+	glUniform3fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_CameraPos"), 1, glm::value_ptr(cameraPos));
+	glUniformMatrix4fv(glGetUniformLocation(mSSRShaderProgram.mProgramID, "cpp_ViewProjectionMatrix"), 1, false, glm::value_ptr(vpMatrix));
+
+	glBindVertexArray(screen_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
+}
+
+void MyView::PostProc_AA(GLuint targetFBO, GLuint colTex) const
+{
+	mAAShaderProgram.Use();
+
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFBO);
+	glDisable(GL_BLEND);
+	glCullFace(GL_BACK);
+
+	glUniform1i(glGetUniformLocation(mAAShaderProgram.mProgramID, "cpp_ColourTex"), 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_RECTANGLE, colTex);
+
+	glBindVertexArray(screen_quad_mesh_.vao);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 }

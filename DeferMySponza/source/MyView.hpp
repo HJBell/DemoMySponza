@@ -11,6 +11,10 @@
 #include "MeshData.hpp"
 #include "UniformStructs.hpp"
 
+enum TogglableFeature
+{
+	DirectionalLight, PointLights, SpotLights, ScreenSpaceReflection, AntiAliasing, Skybox
+};
 
 class MyView : public tygra::WindowViewDelegate
 {
@@ -19,21 +23,19 @@ public:
     ~MyView();
 
     void setScene(const sponza::Context * sponza);
-	void ToggleSSR();
-	void ToggleAA();
-	void ToggleSkybox();
+	void ToggleFeature(TogglableFeature feature);
 
 
 private:
 	int mWidth = 0;
 	int mHeight = 0;
-	bool mSSREnabled = false;
-	bool mAAEnabled = false;
-	bool mSkyboxEnabled = false;
+
+	std::map<TogglableFeature, bool> mFeatureIsEnabled;
 
 	const sponza::Context * mScene;
 
 	std::map<sponza::MeshId, PerModelUniforms> mPerModelUniforms;
+	PerFrameUniforms mPerFrameUniforms;
 	std::map<std::string, GLuint> mTextures;
 
 	std::map<sponza::MeshId, MeshData> mMeshes;
@@ -60,7 +62,6 @@ private:
 	ShaderProgram mSSRShaderProgram;
 	ShaderProgram mAAShaderProgram;
 
-
 	GLuint gbuffer_position_tex_{ 0 };
 	GLuint gbuffer_normal_tex_{ 0 };
 	GLuint gbuffer_colour_tex_{ 0 };
@@ -78,10 +79,21 @@ private:
     void windowViewDidReset(tygra::Window * window, int width, int height) override;
     void windowViewDidStop(tygra::Window * window) override;
     void windowViewRender(tygra::Window * window) override;
-	void DrawMeshesInstanced(ShaderProgram& shaderProgram) const;
-	void DrawMeshInstanced(const MeshData& mesh, ShaderProgram& shaderProgram) const;
+	void DrawMeshesInstanced(const ShaderProgram& shaderProgram) const;
+	void DrawMeshInstanced(const MeshData& mesh, const ShaderProgram& shaderProgram) const;
 	void LoadTexture(std::string path, std::string name);
 	void LoadTextureCube(std::string path, std::string name);
+
+	void RenderGBuffer() const;
+
+	void RenderSkybox(GLuint targetFBO, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const;
+	void RenderAmbientLight(GLuint targetFBO, GLuint colTex) const;
+	void RenderDirectionalLights(GLuint targetFBO, GLuint normTex) const;
+	void RenderPointLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const;
+	void RenderSpotLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const;
+
+	void PostProc_SSR(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, GLuint matTex, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const;
+	void PostProc_AA(GLuint targetFBO, GLuint colTex) const;
 };
 
 

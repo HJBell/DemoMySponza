@@ -30,8 +30,12 @@ void MyController::windowControlWillStart(tygra::Window * window)
     std::cout << "Real-Time Graphics :: RepriseMySponza" << std::endl;
 	std::cout << "*************************************\n" << std::endl;
     std::cout << "  F2 - Toggle an animated camera" << std::endl;
-	std::cout << "  F3 - Toggle screen space reflections" << std::endl;
-	std::cout << "  F4 - Toggle anti aliasing" << std::endl;
+	std::cout << "  F3 - Toggle directional lights" << std::endl;
+	std::cout << "  F4 - Toggle point lights" << std::endl;
+	std::cout << "  F5 - Toggle spot lights" << std::endl;
+	std::cout << "  F6 - Toggle screen space reflections" << std::endl;
+	std::cout << "  F7 - Toggle anti aliasing" << std::endl;
+	std::cout << "  F8 - Toggle skybox" << std::endl;
 	std::cout << std::endl;
 }
 
@@ -114,13 +118,22 @@ void MyController::windowControlKeyboardChanged(tygra::Window * window,
         scene_->toggleCameraAnimation();
         break;
 	case tygra::kWindowKeyF3:
-		view_->ToggleSSR();
+		view_->ToggleFeature(DirectionalLight);
 		break;
 	case tygra::kWindowKeyF4:
-		view_->ToggleAA();
+		view_->ToggleFeature(PointLights);
 		break;
 	case tygra::kWindowKeyF5:
-		view_->ToggleSkybox();
+		view_->ToggleFeature(SpotLights);
+		break;
+	case tygra::kWindowKeyF6:
+		view_->ToggleFeature(ScreenSpaceReflection);
+		break;
+	case tygra::kWindowKeyF7:
+		view_->ToggleFeature(AntiAliasing);
+		break;
+	case tygra::kWindowKeyF8:
+		view_->ToggleFeature(Skybox);
 		break;
 	case tygra::kWindowKeyEsc:
 		window->close();
