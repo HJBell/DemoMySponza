@@ -23,6 +23,12 @@ void ShaderProgram::Use() const
 	glUseProgram(mProgramID);
 }
 
+GLuint ShaderProgram::GetID() const
+{
+	// Returning the ID of the program.
+	return mProgramID;
+}
+
 void ShaderProgram::Init(std::string vertexShaderPath, std::string fragmentShaderPath, bool isGBufferSahderProg)
 {
 	// Loading and compiling the vertex and fragment shader to be used in the shader program.
@@ -35,13 +41,6 @@ void ShaderProgram::Init(std::string vertexShaderPath, std::string fragmentShade
 	// Attaching the shaders to the shader program.
 	glAttachShader(mProgramID, vertexShaderID);
 	glAttachShader(mProgramID, fragmentShaderID);
-
-	// THIS IS SO HACKY -> NEEDS TO BE REFACTORED!!!!!!!!!!!!!!!!!!!!
-	if (isGBufferSahderProg)
-	{
-		glBindFragDataLocation(mProgramID, 0, "fs_Position");
-		glBindFragDataLocation(mProgramID, 1, "fs_Normal");
-	}
 
 	// Linking the shader program
 	glLinkProgram(mProgramID);

@@ -49,8 +49,8 @@ private:
 		int element_count{ 0 };
 	};
 
-	Mesh screen_quad_mesh_; // vertex array of vec2 position
-	Mesh light_sphere_mesh_; // element array into vec3 position
+	Mesh screen_quad_mesh_;
+	Mesh light_sphere_mesh_;
 	Mesh light_cone_mesh_;
 
 	ShaderProgram mSkyboxShaderProgram;
@@ -79,19 +79,17 @@ private:
     void windowViewDidReset(tygra::Window * window, int width, int height) override;
     void windowViewDidStop(tygra::Window * window) override;
     void windowViewRender(tygra::Window * window) override;
-	void DrawMeshesInstanced(const ShaderProgram& shaderProgram) const;
+
 	void DrawMeshInstanced(const MeshData& mesh, const ShaderProgram& shaderProgram) const;
 	void LoadTexture(std::string path, std::string name);
 	void LoadTextureCube(std::string path, std::string name);
 
 	void RenderGBuffer() const;
-
 	void RenderSkybox(GLuint targetFBO, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const;
 	void RenderAmbientLight(GLuint targetFBO, GLuint colTex) const;
 	void RenderDirectionalLights(GLuint targetFBO, GLuint normTex) const;
 	void RenderPointLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const;
 	void RenderSpotLights(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, const glm::mat4& vpMatrix) const;
-
 	void PostProc_SSR(GLuint targetFBO, GLuint colTex, GLuint posTex, GLuint normTex, GLuint matTex, const glm::vec3& cameraPos, const glm::mat4& vpMatrix) const;
 	void PostProc_AA(GLuint targetFBO, GLuint colTex) const;
 };
