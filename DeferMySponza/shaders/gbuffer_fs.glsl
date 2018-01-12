@@ -2,9 +2,6 @@
 
 #define MAX_INSTANCE_COUNT 64
 
-
-//----------------------Structures----------------------
-
 struct InstanceData
 {
 	mat4 mvpXform;
@@ -20,9 +17,6 @@ struct DirectionalLight
 	vec3 direction;
 	vec3 intensity;
 };
-
-
-//----------------------Uniforms----------------------
 
 layout(std140) uniform cpp_PerFrameUniforms
 {
@@ -43,27 +37,19 @@ layout(std140) uniform cpp_DirectionalLightUniforms
 uniform sampler2D cpp_Texture;
 uniform int cpp_EnableSSR;
 
-
-//----------------------In Variables----------------------
-
 in vec3 vs_Position;
 in vec3 vs_Normal;
 in vec2 vs_TextureCoord;
 flat in int vs_InstanceID;
-
-
-//----------------------Out Variables----------------------
 
 out vec3 fs_Position;
 out vec3 fs_Normal;
 out vec3 fs_Colour;
 out vec3 fs_Material;
 
-
-//----------------------Main Function----------------------
-
 void main(void)
 {	
+	// Outputting the mesh data to the gbuffer textures.
 	fs_Position = vs_Position;
 	fs_Normal = vs_Normal;
 	fs_Colour = cpp_Instances[vs_InstanceID].diffuse * texture(cpp_Texture, vs_TextureCoord).rgb;

@@ -1,26 +1,14 @@
 #version 330
 
-
-//----------------------Uniforms----------------------
-
 layout(std140) uniform cpp_SkyboxUniforms
 {
 	mat4 cpp_ViewProjectionXform;
 	vec3 cpp_CameraPos;
 };
 
-
-//----------------------In Variables----------------------
-
 in vec3 cpp_VertexPosition;
 
-
-//----------------------Out Variables----------------------
-
 out vec3 vs_TextureCoord;
-
-
-//----------------------Main Function----------------------
 
 void main(void)
 {

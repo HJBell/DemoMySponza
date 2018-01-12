@@ -159,7 +159,6 @@ void MyView::windowViewWillStart(tygra::Window * window)
 	mSkyboxMesh.Init(CubeVerts);
 
 	// Loading textures.
-	LoadTexture("resource:///hex.png", "Hex");
 	LoadTexture("resource:///marble.png", "Marble");
 	LoadTextureCube("resource:///skybox_stormy_", "Skybox");
 
@@ -338,7 +337,7 @@ void MyView::windowViewRender(tygra::Window * window)
 
 	// Clearing the LBuffer.
 	glBindFramebuffer(GL_FRAMEBUFFER, lbuffer_fbo_);
-	glClearColor(0.f, 0.f, 0.25f, 1.f);
+	glClearColor(0.42f, 0.15f, 0.53f, 1.f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	// Rendering the skybox if enabled.

@@ -14,25 +14,33 @@ out vec3 fs_Colour;
 
 void main(void)
 {
+	// Getting the fragment data from the gbuffer textures.
 	vec3 pos = texture(cpp_PositionTex, gl_FragCoord.xy).xyz;
 	vec3 normal = normalize(texture(cpp_NormalTex, gl_FragCoord.xy).xyz);
 	vec3 fragCol = texture(cpp_ColourTex, gl_FragCoord.xy).rgb;
 
 	vec3 colour = vec3(0.0);
+
+	// Checking if the fragment is within the cone of the light.
 	vec3 lightDirection = normalize(cpp_LightDir);
 	vec3 lightToFragment = pos - cpp_LightPos;
 	float angleBetweenLightAndRay = dot(lightDirection, normalize(lightToFragment));
 	if (angleBetweenLightAndRay > cos(cpp_LightAngle))
 	{
+		// Calculating the intensity of the light on the fragment due to its distance from the light source.
 		float distanceToLight = length(-lightToFragment);
 		float rangeIntensity = (1.0 - smoothstep(0, cpp_LightRange, distanceToLight));
 		if (rangeIntensity > 0.0)
 		{
+			// Calculating the intesity of the light on the fragment due to its angle relactive to the light source and its position in the cone.
 			float angleIntensity = max(0.0, dot(normalize(-lightToFragment), normal));
 			float angularAttenuation = smoothstep(cos(cpp_LightAngle), cos(cpp_LightAngle * 0.9), angleBetweenLightAndRay);
+
+			// Combining the various intesity calculations to give the final colour.
 			colour = fragCol * angleIntensity * cpp_LightIntensity * rangeIntensity * angularAttenuation;
 		}
 	}
 
+	// Outputting the colour.
 	fs_Colour = clamp(colour, 0.0, 1.0);
 }

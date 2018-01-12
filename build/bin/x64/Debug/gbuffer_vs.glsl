@@ -2,9 +2,6 @@
 
 #define MAX_INSTANCE_COUNT 64
 
-
-//----------------------Structures----------------------
-
 struct InstanceData
 {
 	mat4 mvpXform;
@@ -15,31 +12,19 @@ struct InstanceData
 	int isShiny;
 };
 
-
-//----------------------Uniforms----------------------
-
 layout(std140) uniform cpp_PerModelUniforms
 {
 	InstanceData cpp_Instances[MAX_INSTANCE_COUNT];
 };
 
-
-//----------------------In Variables----------------------
-
 in vec3 cpp_VertexPosition;
 in vec3 cpp_VertexNormal;
 in vec2 cpp_TextureCoord;
-
-
-//----------------------Out Variables----------------------
 
 out vec3 vs_Position;
 out vec3 vs_Normal;
 out vec2 vs_TextureCoord;
 flat out int vs_InstanceID;
-
-
-//----------------------Main Function----------------------
 
 void main(void)
 {
