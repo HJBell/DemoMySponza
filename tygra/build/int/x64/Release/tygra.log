@@ -1,0 +1,6 @@
+﻿  FileHelper.cpp
+  Window.cpp
+  No target GL version declared, defaulting to GL 3.3
+  For example, use #define TGL_TARGET_GL_4_1 before including tgl.h to specify OpenGL 4.1
+  LINK : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+  tygra.vcxproj -> C:\Users\p4014518\Desktop\DemoMySponza\build\lib\x64\Release\v141\tygra.lib

@@ -1,0 +1,14 @@
+﻿  Camera.cpp
+  Context.cpp
+src\Context.cpp(96): warning C4267: 'argument': conversion from 'size_t' to 'sponza::InstanceId', possible loss of data
+src\Context.cpp(97): warning C4267: 'argument': conversion from 'size_t' to 'sponza::MeshId', possible loss of data
+  DirectionalLight.cpp
+  GeometryBuilder.cpp
+src\GeometryBuilder.cpp(69): warning C4267: 'argument': conversion from 'size_t' to 'sponza::MeshId', possible loss of data
+  Instance.cpp
+  Material.cpp
+  Mesh.cpp
+  PointLight.cpp
+  SpotLight.cpp
+  LINK : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+  sponza.vcxproj -> C:\Users\p4014518\Desktop\DemoMySponza\build\lib\x64\Release\v141\sponza.lib
